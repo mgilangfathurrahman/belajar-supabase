@@ -4,11 +4,8 @@ require 'koneksi.php';
 
 try {
     // 2. Tulis query SELECT untuk mengambil semua data produk, diurutkan dari yang terbaru
-$stmt = $pdo->query("SELECT * FROM produk ORDER BY id DESC");
-$produk_list = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
-    // 3. Ambil semua baris data
-    $semua_produk = $stmt->fetchAll();
+    $stmt = $pdo->query("SELECT * FROM produk ORDER BY id DESC");
+    $produk_list = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 } catch (PDOException $e) {
     echo "Gagal mengambil data: " . $e->getMessage();
@@ -38,10 +35,10 @@ $produk_list = $stmt->fetchAll(PDO::FETCH_ASSOC);
     <a href="form-tambah.php" class="btn btn-tambah">Tambah Produk Baru</a>
     <br><br>
 
-<table border="1" cellpadding="10" cellspacing="0">
+<table>
     <thead>
         <tr>
-            <th>No</th> <!-- Kita ubah label judul kolomnya menjadi No atau tetap ID versi nomor urut -->
+            <th>No</th>
             <th>Nama Produk</th>
             <th>Harga</th>
             <th>Stok</th>
@@ -50,17 +47,16 @@ $produk_list = $stmt->fetchAll(PDO::FETCH_ASSOC);
     </thead>
     <tbody>
         <?php 
-        $no = 1; // 1. Mulai nomor urut dari angka 1
+        $no = 1; // Mulai nomor urut dari angka 1
         foreach ($produk_list as $row): 
         ?>
         <tr>
-            <!-- 2. Tampilkan variabel $no, lalu naikkan nilainya dengan $no++ -->
             <td><?php echo $no++; ?></td> 
             <td><?php echo htmlspecialchars($row['nama_produk']); ?></td>
             <td>Rp <?php echo number_format($row['harga'], 0, ',', '.'); ?></td>
             <td><?php echo $row['stok']; ?></td>
             <td>
-                <a href="form-edit.php?id=<?php echo $row['id']; ?>" class="btn-edit">Edit</a>
+                <a href="form-edit.php?id=<?php echo $row['id']; ?>" class="btn-edit btn">Edit</a>
             </td>
         </tr>
         <?php endforeach; ?>
