@@ -1,6 +1,6 @@
 <?php
 // PHP akan mengambil data ini dari pengaturan server (Environment Variables)
-$host     = getenv('DB_HOST') ?: "://supabase.com"; // Isikan default localhost Anda jika ada
+$host     = getenv('aws-0-ap-southeast-1.pooler.supabase.com') ?: "://supabase.com"; // Isikan default localhost Anda jika ada
 $port     = getenv('DB_PORT') ?: "5432";
 $dbname   = getenv('DB_NAME') ?: "postgres";
 $user     = getenv('DB_USER');
