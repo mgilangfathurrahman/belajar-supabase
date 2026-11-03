@@ -1,6 +1,4 @@
-<?php
-// Langsung menampilkan seluruh isi dari tampil-data.php di halaman utama
-require_once __DIR__ . '/tampil-data.php'; 
+
 <!DOCTYPE html>
 <html lang="id">
 <head>
