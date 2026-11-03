@@ -4,8 +4,8 @@ require 'koneksi.php';
 
 try {
     // 2. Tulis query SELECT untuk mengambil semua data produk, diurutkan dari yang terbaru
-    $sql = "SELECT * FROM produk ORDER BY id DESC";
-    $stmt = $pdo->query($sql);
+$stmt = $pdo->query("SELECT * FROM produk ORDER BY id DESC");
+$produk_list = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
     // 3. Ambil semua baris data
     $semua_produk = $stmt->fetchAll();
@@ -38,37 +38,34 @@ try {
     <a href="form-tambah.php" class="btn btn-tambah">Tambah Produk Baru</a>
     <br><br>
 
-    <table>
-        <thead>
-            <tr>
-                <th>ID</th>
-                <th>Nama Produk</th>
-                <th>Harga</th>
-                <th>Stok</th>
-                <th>Aksi</th>
-            </tr>
-        </thead>
-        <tbody>
-            <?php if (count($semua_produk) > 0): ?>
-                <?php foreach ($semua_produk as $produk): ?>
-                    <tr>
-                        <td><?= $produk['id']; ?></td>
-                        <td><?= htmlspecialchars($produk['nama_produk']); ?></td>
-                        <td>Rp <?= number_format($produk['harga'], 0, ',', '.'); ?></td>
-                        <td><?= $produk['stok']; ?></td>
-                        <td>
-                            <!-- Mengirimkan ID produk lewat URL ke form edit -->
-                            <a href="form-edit.php?id=<?= $produk['id']; ?>" class="btn btn-edit">Edit</a>
-                        </td>
-                    </tr>
-                <?php endforeach; ?>
-            <?php else: ?>
-                <tr>
-                    <td colspan="5" style="text-align: center;">Belum ada data produk.</td>
-                </tr>
-            <?php endif; ?>
-        </tbody>
-    </table>
+<table border="1" cellpadding="10" cellspacing="0">
+    <thead>
+        <tr>
+            <th>No</th> <!-- Kita ubah label judul kolomnya menjadi No atau tetap ID versi nomor urut -->
+            <th>Nama Produk</th>
+            <th>Harga</th>
+            <th>Stok</th>
+            <th>Aksi</th>
+        </tr>
+    </thead>
+    <tbody>
+        <?php 
+        $no = 1; // 1. Mulai nomor urut dari angka 1
+        foreach ($produk_list as $row): 
+        ?>
+        <tr>
+            <!-- 2. Tampilkan variabel $no, lalu naikkan nilainya dengan $no++ -->
+            <td><?php echo $no++; ?></td> 
+            <td><?php echo htmlspecialchars($row['nama_produk']); ?></td>
+            <td>Rp <?php echo number_format($row['harga'], 0, ',', '.'); ?></td>
+            <td><?php echo $row['stok']; ?></td>
+            <td>
+                <a href="form-edit.php?id=<?php echo $row['id']; ?>" class="btn-edit">Edit</a>
+            </td>
+        </tr>
+        <?php endforeach; ?>
+    </tbody>
+</table>
 
 </body>
 </html>
