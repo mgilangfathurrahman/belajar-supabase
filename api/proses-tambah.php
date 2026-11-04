@@ -1,6 +1,11 @@
 <?php
 // 1. Hubungkan dengan file koneksi
 require 'koneksi.php';
+session_start();
+if (!isset($_SESSION['login'])) {
+    header("Location: login.php");
+    exit;
+}
 
 // 2. Pastikan file ini diakses setelah user menekan tombol submit (metode POST)
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
