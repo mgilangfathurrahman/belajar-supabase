@@ -1,7 +1,11 @@
 <?php
 // 1. Hubungkan kembali dengan file koneksi
 require 'koneksi.php';
-
+session_start();
+if (!isset($_SESSION['login'])) {
+    header("Location: login.php");
+    exit;
+}
 try {
     // 2. Siapkan data produk yang ingin dimasukkan
     $nama_produk = "";
