@@ -1,6 +1,10 @@
 <?php
 require 'koneksi.php';
-
+session_start();
+if (!isset($_SESSION['login'])) {
+    header("Location: login.php");
+    exit;
+}
 // Pastikan ada parameter ID di URL
 if (!isset($_GET['id'])) {
     header("Location: tampil-data.php");
