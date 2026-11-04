@@ -1,9 +1,36 @@
 <?php
 session_start();
-// Jika sudah kadung login, langsung lempar ke tampil-data
+require 'koneksi.php';
+
+// Jika sudah login, langsung lempar ke tampil-data
 if (isset($_SESSION['login'])) {
     header("Location: tampil-data.php");
     exit;
+}
+
+$error = false;
+
+// Proses login langsung di halaman ini
+if ($_SERVER["REQUEST_METHOD"] == "POST") {
+    $username = $_POST['username'];
+    $password = $_POST['password'];
+
+    try {
+        $stmt = $pdo->prepare("SELECT * FROM users WHERE username = :username");
+        $stmt->execute([':username' => $username]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($user && password_verify($password, $user['password'])) {
+            $_SESSION['login'] = true;
+            $_SESSION['username'] = $user['username'];
+            header("Location: tampil-data.php");
+            exit;
+        } else {
+            $error = true;
+        }
+    } catch (PDOException $e) {
+        $error = true;
+    }
 }
 ?>
 <!DOCTYPE html>
@@ -28,11 +55,12 @@ if (isset($_SESSION['login'])) {
 <div class="login-card">
     <h2>Login Admin</h2>
     
-    <?php if (isset($_GET['error'])): ?>
+    <?php if ($error): ?>
         <div class="error">Username atau Password salah!</div>
     <?php endif; ?>
 
-    <form action="proses-login.php" method="POST">
+    <!-- Atribut action dikosongkan agar diproses di file ini sendiri -->
+    <form action="" method="POST">
         <div class="form-group">
             <label>Username</label>
             <input type="text" name="username" required>
