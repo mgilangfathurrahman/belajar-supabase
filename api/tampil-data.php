@@ -24,9 +24,10 @@ try {
         th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
         th { background-color: #24b47e; color: white; }
         tr:nth-child(even) { background-color: #f2f2f2; }
-        .btn { padding: 6px 12px; text-decoration: none; color: white; border-radius: 4px; font-size: 14px; }
+        .btn { padding: 6px 12px; text-decoration: none; color: white; border-radius: 4px; font-size: 14px; display: inline-block; margin-right: 4px; }
         .btn-tambah { background-color: #24b47e; padding: 10px 15px; }
         .btn-edit { background-color: #f0ad4e; }
+        .btn-hapus { background-color: #d9534f; } /* Tombol warna merah */
     </style>
 </head>
 <body>
@@ -47,7 +48,7 @@ try {
     </thead>
     <tbody>
         <?php 
-        $no = 1; // Mulai nomor urut dari angka 1
+        $no = 1; 
         foreach ($produk_list as $row): 
         ?>
         <tr>
@@ -57,6 +58,11 @@ try {
             <td><?php echo $row['stok']; ?></td>
             <td>
                 <a href="form-edit.php?id=<?php echo $row['id']; ?>" class="btn-edit btn">Edit</a>
+                
+                <!-- Tombol Hapus dengan Konfirmasi JavaScript -->
+                <a href="hapus-data.php?id=<?php echo $row['id']; ?>" 
+                   class="btn-hapus btn" 
+                   onclick="return confirm('Apakah Anda yakin ingin menghapus produk ini?');">Hapus</a>
             </td>
         </tr>
         <?php endforeach; ?>
