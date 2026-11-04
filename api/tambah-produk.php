@@ -4,9 +4,9 @@ require 'koneksi.php';
 
 try {
     // 2. Siapkan data produk yang ingin dimasukkan
-    $nama_produk = "Laptop ASUS Vivobook";
-    $harga       = 8500000;
-    $stok        = 10;
+    $nama_produk = "";
+    $harga       = ;
+    $stok        = ;
 
     // 3. Tulis Query INSERT dengan placeholder (? atau :nama) demi keamanan
     $sql = "INSERT INTO produk (nama_produk, harga, stok) VALUES (:nama, :harga, :stok)";
