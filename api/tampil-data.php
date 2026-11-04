@@ -30,7 +30,7 @@ try {
     </style>
 </head>
 <body>
-
+<a href="login.php" class="btn btn-auth" style="background-color: #2980b9;">Login Admin</a>
     <!-- Tombol Login / Logout di sudut kanan atas -->
     <?php if (isset($_SESSION['login'])): ?>
         <a href="logout.php" class="btn btn-auth">Logout (Admin)</a>
