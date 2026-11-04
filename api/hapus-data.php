@@ -1,6 +1,11 @@
 <?php
 // 1. Hubungkan dengan file koneksi
 require 'koneksi.php';
+session_start();
+if (!isset($_SESSION['login'])) {
+    header("Location: login.php");
+    exit;
+}
 
 // 2. Cek apakah ada parameter 'id' yang dikirim melalui URL
 if (isset($_GET['id'])) {
