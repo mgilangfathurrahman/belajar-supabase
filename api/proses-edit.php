@@ -1,5 +1,10 @@
 <?php
 require 'koneksi.php';
+session_start();
+if (!isset($_SESSION['login'])) {
+    header("Location: login.php");
+    exit;
+}
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     // Tangkap data baru dari form edit
