@@ -1,7 +1,11 @@
 <?php
 // 1. Hubungkan dengan file koneksi yang sudah sukses sebelumnya
 require 'koneksi.php';
-
+session_start();
+if (!isset($_SESSION['login'])) {
+    header("Location: login.php");
+    exit;
+}
 try {
     // 2. Tulis Query SQL PostgreSQL untuk membuat tabel 'produk'
     // Menggunakan SERIAL agar ID otomatis bertambah (Auto Increment)
