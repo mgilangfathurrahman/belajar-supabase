@@ -1,22 +1,20 @@
 <?php
-// PHP akan mengambil data ini dari pengaturan server (Environment Variables)
-$host     = getenv('DB_HOST') ?: "aws-0-ap-southeast-1.pooler.supabase.com"; // Isikan default localhost Anda jika ada
-$port     = getenv('DB_PORT') ?: "5432";
-$dbname   = getenv('DB_NAME') ?: "postgres";
+$host     = getenv('DB_HOST');
+$port     = getenv('DB_PORT') ?: '5432';
+$dbname   = getenv('DB_NAME') ?: 'postgres';
 $user     = getenv('DB_USER');
 $password = getenv('DB_PASSWORD');
 
 try {
-    $dsn = "pgsql:host=$host;port=$port;dbname=$dbname;user=$user;password=$password";
+    $dsn = "pgsql:host=$host;port=$port;dbname=$dbname";
     
-    $pdo = new PDO($dsn, null, null, [
+    $pdo = new PDO($dsn, $user, $password, [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
     ]);
 
-    // echo "Koneksi Sukses!"; // Sudah kita komentari sebelumnya
 } catch (PDOException $e) {
-    echo "<h1>Koneksi Gagal!</h1>";
-    echo "<p>Pesan Error dari System: <strong>" . $e->getMessage() . "</strong></p>";
+    echo "<h1>Koneksi ke Supabase Gagal!</h1>";
+    echo "<p>Pesan Error: <strong>" . $e->getMessage() . "</strong></p>";
 }
 ?>
