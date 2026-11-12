@@ -262,6 +262,13 @@ if ($export !== '') {
         .alert-ok { background: #e6f7f0; color: #24b47e; padding: 10px; margin: 15px 0; border-radius: 5px; font-weight: bold; }
         .alert-err { background: #ffe6e6; color: #d93025; padding: 10px; margin: 15px 0; border-radius: 5px; }
         .kontak-info { font-size: 12px; color: #555; margin-top: 4px; }
+		.header-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin: 20px 0 10px; }
+        .export-group { display: flex; flex-wrap: wrap; gap: 8px; }
+        .btn-exp { color: white; padding: 8px 12px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 13px; display: inline-flex; align-items: center; gap: 5px; }
+        .btn-xlsx { background: #107c41; } .btn-xlsx:hover { background: #0b5a2f; }
+        .btn-xls { background: #24b47e; } .btn-xls:hover { background: #1c8c61; }
+        .btn-csv { background: #4b5563; } .btn-csv:hover { background: #374151; }
+        .btn-pdf { background: #dc2626; } .btn-pdf:hover { background: #b91c1c; }
     </style>
 </head>
 <body>
@@ -316,7 +323,15 @@ if ($export !== '') {
         </div>
     </form>
 
-    <h3><?= $is_super ? 'Daftar Semua Pesanan Masuk (Seluruh Admin & Pelanggan)' : 'Daftar Pesanan Inputan ' . htmlspecialchars($admin_nama) ?></h3>
+     <div class="header-bar">
+        <h3 style="margin:0;"><?= $is_super ? 'Daftar Semua Pesanan Masuk (Seluruh Admin & Pelanggan)' : 'Daftar Pesanan Inputan ' . htmlspecialchars($admin_nama) ?></h3>
+        <div class="export-group">
+            <a href="pesanan.php?export=xlsx" class="btn-exp btn-xlsx">📊 Excel (.xlsx)</a>
+            <a href="pesanan.php?export=xls" class="btn-exp btn-xls">📗 Excel (.xls)</a>
+            <a href="pesanan.php?export=csv" class="btn-exp btn-csv">📄 CSV (.csv)</a>
+            <a href="pesanan.php?export=pdf" class="btn-exp btn-pdf">📕 PDF (.pdf)</a>
+        </div>
+    </div>
     <div class="table-wrapper">
         <table>
             <thead>
