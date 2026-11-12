@@ -1,14 +1,11 @@
 <?php
-// 1. Mulai atau panggil sesi yang sedang berjalan
-session_start();
+// Hapus cookie pada path root (/) dan path default
+setcookie('admin_logged_in', '', time() - 3600, '/');
+setcookie('admin_logged_in', '', time() - 3600);
 
-// 2. Kosongkan semua variabel sesi yang tersimpan
-$_SESSION = [];
+// Bersihkan variabel superglobal $_COOKIE pada eksekusi saat ini
+unset($_COOKIE['admin_logged_in']);
 
-// 3. Hapus sesi secara permanen dari server
-session_destroy();
-
-// 4. Arahkan pengguna kembali ke halaman katalog produk publik
-header("Location: index.php");
+// Arahkan kembali ke halaman login dengan pesan status
+header("Location: login.php?status=logout");
 exit;
-?>
