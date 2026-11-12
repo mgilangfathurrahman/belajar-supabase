@@ -191,17 +191,13 @@ if ($export === 'csv') {
     <style>
         body { font-family: sans-serif; margin: 20px 40px; }
         nav a { margin-right: 15px; text-decoration: none; font-weight: bold; color: #24b47e; }
-        .header-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin-top: 15px; }
+		.header-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin: 20px 0 10px; }
         .export-group { display: flex; flex-wrap: wrap; gap: 8px; }
-        .btn-exp { color: white; padding: 9px 14px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 13px; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
-        .btn-xlsx { background: #107c41; }
-        .btn-xlsx:hover { background: #0b5a2f; }
-        .btn-xls { background: #24b47e; }
-        .btn-xls:hover { background: #1c8c61; }
-        .btn-csv { background: #4b5563; }
-        .btn-csv:hover { background: #374151; }
-        .btn-pdf { background: #dc2626; }
-        .btn-pdf:hover { background: #b91c1c; }
+        .btn-exp { color: white; padding: 8px 12px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 13px; display: inline-flex; align-items: center; gap: 5px; }
+        .btn-xlsx { background: #107c41; } .btn-xlsx:hover { background: #0b5a2f; }
+        .btn-xls { background: #24b47e; } .btn-xls:hover { background: #1c8c61; }
+        .btn-csv { background: #4b5563; } .btn-csv:hover { background: #374151; }
+        .btn-pdf { background: #dc2626; } .btn-pdf:hover { background: #b91c1c; }
         .cards { display: flex; flex-wrap: wrap; gap: 20px; margin: 20px 0; }
         .card { background: #f4f7f6; padding: 20px; border-left: 5px solid #24b47e; width: 250px; border-radius: 4px; }
         .card h3 { margin: 0; font-size: 14px; color: #555; }
