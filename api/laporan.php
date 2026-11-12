@@ -223,14 +223,7 @@ if ($export === 'csv') {
     <hr>
  
     <div class="header-bar">
-        <h2 style="margin:0;">Dashboard Penjualan <span class="badge">● Live Real-Time</span></h2>
-        <div class="export-group">
-            <a href="laporan.php?export=xlsx" class="btn-exp btn-xlsx">📊 Excel (.xlsx)</a>
-            <a href="laporan.php?export=xls" class="btn-exp btn-xls">📗 Excel (.xls)</a>
-            <a href="laporan.php?export=csv" class="btn-exp btn-csv">📄 CSV (.csv)</a>
-            <a href="laporan.php?export=pdf" class="btn-exp btn-pdf">📕 PDF (.pdf)</a>
-        </div>
-                <h3 style="margin:0;"><?= $is_super ? 'Dashboard Penjualan' : '<span class="badge">● Live Real-Time</span>' . htmlspecialchars($admin_nama) ?></h3>
+       <h3 style="margin:0;"><span class="badge"><?= $is_super ? 'Dashboard Penjualan' : '● Live Real-Time' . htmlspecialchars($admin_nama) ?></span></h3>
         <div class="export-group">
             <a href="pesanan.php?export=xlsx" class="btn-exp btn-xlsx">📊 Excel (.xlsx)</a>
             <a href="pesanan.php?export=xls" class="btn-exp btn-xls">📗 Excel (.xls)</a>
