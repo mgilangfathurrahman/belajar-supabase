@@ -31,12 +31,21 @@ if (isset($_GET['hapus'])) {
     }
 }
 
-// 2. Ambil Data Jika Sedang Mode Edit
+// 2. Ambil Data Jika Sedang Mode Edit (Hanya pembuat atau Superadmin)
 if (isset($_GET['edit'])) {
     $id_edit = (int) $_GET['edit'];
-    $stmt = $pdo->prepare("SELECT * FROM produk WHERE id = :id");
-    $stmt->execute([':id' => $id_edit]);
+    if ($is_super) {
+        $stmt = $pdo->prepare("SELECT * FROM produk WHERE id = :id");
+        $stmt->execute([':id' => $id_edit]);
+    } else {
+        $stmt = $pdo->prepare("SELECT * FROM produk WHERE id = :id AND dibuat_oleh = :oleh");
+        $stmt->execute([':id' => $id_edit, ':oleh' => $admin_nama]);
+    }
     $edit_data = $stmt->fetch();
+
+    if (!$edit_data) {
+        $pesan = "Akses ditolak! Anda hanya dapat mengedit produk yang Anda buat sendiri.";
+    }
 }
 
 // 3. Proses Simpan (Tambah Baru atau Update Edit)
@@ -48,13 +57,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
         if (!empty($_POST['id_edit'])) {
             $id_edit = (int) $_POST['id_edit'];
-            $stmt = $pdo->prepare("UPDATE produk SET nama_produk = :nama, harga = :harga, stok = :stok WHERE id = :id");
-            $stmt->execute([
-                ':nama'  => $nama_produk,
-                ':harga' => $harga,
-                ':stok'  => $stok,
-                ':id'    => $id_edit
-            ]);
+            if ($is_super) {
+                $stmt = $pdo->prepare("UPDATE produk SET nama_produk = :nama, harga = :harga, stok = :stok WHERE id = :id");
+                $stmt->execute([
+                    ':nama'  => $nama_produk,
+                    ':harga' => $harga,
+                    ':stok'  => $stok,
+                    ':id'    => $id_edit
+                ]);
+            } else {
+                $stmt = $pdo->prepare("UPDATE produk SET nama_produk = :nama, harga = :harga, stok = :stok WHERE id = :id AND dibuat_oleh = :oleh");
+                $stmt->execute([
+                    ':nama'  => $nama_produk,
+                    ':harga' => $harga,
+                    ':stok'  => $stok,
+                    ':id'    => $id_edit,
+                    ':oleh'  => $admin_nama
+                ]);
+            }
             header("Location: produk.php?status=diubah");
             exit;
         } else {
@@ -305,8 +325,13 @@ if ($export !== '') {
                     <td>Rp <?= number_format($p['harga'], 0, ',', '.') ?></td>
                     <td><?= $p['stok'] ?></td>
                     <td><strong><?= htmlspecialchars($p['dibuat_oleh'] ?? '-') ?></strong></td>
-                    <td>
-                        <a href="produk.php?edit=<?= $p['id'] ?>" class="btn-aksi btn-edit">Edit</a>
+                   <td>
+                        <?php if ($is_super || ($p['dibuat_oleh'] ?? '') === $admin_nama): ?>
+                            <a href="produk.php?edit=<?= $p['id'] ?>" class="btn-aksi btn-edit">Edit</a>
+                        <?php else: ?>
+                            <span style="color:#888; font-size:12px;">Hanya Lihat</span>
+                        <?php endif; ?>
+
                         <?php if ($is_super): ?>
                             <a href="produk.php?hapus=<?= $p['id'] ?>" class="btn-aksi btn-hapus" onclick="return confirm('Yakin ingin menghapus produk ini?')">Hapus</a>
                         <?php endif; ?>
