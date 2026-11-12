@@ -3,12 +3,12 @@ if (!isset($_COOKIE['admin_logged_in']) || $_COOKIE['admin_logged_in'] !== 'true
     header("Location: login.php");
     exit;
 }
- 
+
 require 'koneksi.php';
- 
+
 $pesan = "";
 $edit_data = null;
- 
+
 // 1. Proses Hapus Produk
 if (isset($_GET['hapus'])) {
     $id_hapus = (int) $_GET['hapus'];
@@ -21,7 +21,7 @@ if (isset($_GET['hapus'])) {
         $pesan = "Gagal menghapus produk: " . $e->getMessage();
     }
 }
- 
+
 // 2. Ambil Data Jika Sedang Mode Edit
 if (isset($_GET['edit'])) {
     $id_edit = (int) $_GET['edit'];
@@ -29,13 +29,13 @@ if (isset($_GET['edit'])) {
     $stmt->execute([':id' => $id_edit]);
     $edit_data = $stmt->fetch();
 }
- 
+
 // 3. Proses Simpan (Tambah Baru atau Update Edit)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $nama_produk = trim($_POST['nama_produk']);
     $harga       = (int) $_POST['harga'];
     $stok        = (int) $_POST['stok'];
- 
+
     try {
         if (!empty($_POST['id_edit'])) {
             // Update Produk Lama
@@ -64,14 +64,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $pesan = "Terjadi kesalahan: " . $e->getMessage();
     }
 }
- 
+
 $produk_list = $pdo->query("SELECT * FROM produk ORDER BY id DESC")->fetchAll();
- 
+
 // 4. Download data produk: ?export=xlsx | xls | pdf | csv
 $export = $_GET['export'] ?? '';
 if (in_array($export, ['xlsx', 'xls', 'pdf', 'csv'], true)) {
     require_once __DIR__ . '/export_helpers.php';
- 
+
     $total_produk = count($produk_list);
     $total_stok   = 0;
     foreach ($produk_list as $r) {
@@ -80,11 +80,11 @@ if (in_array($export, ['xlsx', 'xls', 'pdf', 'csv'], true)) {
     $judul_tabel = 'Daftar Semua Produk';
     $headers     = ['No', 'Nama Produk', 'Harga', 'Stok'];
     $stamp       = date('Y-m-d_H-i');
- 
+
     // ---------- XLSX ----------
     if ($export === 'xlsx') {
         $kosong = fn(string $gaya) => xcell('', $gaya);
- 
+
         $rows = [];
         $rows[] = [xcell('Data Produk - Toko Gilang', 'title')];
         $rows[] = [xcell('Dicetak: ' . date('d-m-Y H:i'), 'muted')];
@@ -100,7 +100,7 @@ if (in_array($export, ['xlsx', 'xls', 'pdf', 'csv'], true)) {
         $rows[] = [];
         $rows[] = [xcell($judul_tabel, 'section')];
         $rows[] = array_map(fn($h) => xcell($h, 'head'), $headers);
- 
+
         foreach (array_values($produk_list) as $i => $r) {
             $rows[] = [
                 xcell($i + 1, 'int'),
@@ -109,7 +109,7 @@ if (in_array($export, ['xlsx', 'xls', 'pdf', 'csv'], true)) {
                 xcell((int)$r['stok'], 'int'),
             ];
         }
- 
+
         $xlsx = buildXlsx(
             $rows,
             [],
@@ -124,11 +124,11 @@ if (in_array($export, ['xlsx', 'xls', 'pdf', 'csv'], true)) {
             'Data-Produk-Toko-Gilang-' . $stamp . '.xlsx'
         );
     }
- 
+
     // ---------- PDF ----------
     if ($export === 'pdf') {
         $widths = [60, 360, 180, 182]; // total 782 pt (A4 landscape)
- 
+
         $rows = [];
         foreach (array_values($produk_list) as $i => $r) {
             $rows[] = [
@@ -142,11 +142,11 @@ if (in_array($export, ['xlsx', 'xls', 'pdf', 'csv'], true)) {
             ['Total Produk', $total_produk . ' Produk'],
             ['Total Stok', $total_stok . ' Unit'],
         ];
- 
+
         $pdf = buildPdf('Data Produk - Toko Gilang', $headers, $rows, $widths, null, $summary, $judul_tabel);
         send_download($pdf, 'application/pdf', 'Data-Produk-' . $stamp . '.pdf');
     }
- 
+
     // ---------- CSV ----------
     if ($export === 'csv') {
         header('Content-Type: text/csv; charset=utf-8');
@@ -160,12 +160,12 @@ if (in_array($export, ['xlsx', 'xls', 'pdf', 'csv'], true)) {
         fclose($out);
         exit;
     }
- 
+
     // ---------- XLS (HTML table, semua gaya inline agar terbaca Excel) ----------
     if ($export === 'xls') {
         header('Content-Type: application/vnd.ms-excel; charset=utf-8');
         header('Content-Disposition: attachment; filename="Data-Produk-' . $stamp . '.xls"');
- 
+
         $s_judul = 'font-size:18pt;font-weight:bold;';
         $s_muted = 'font-size:10pt;color:#555555;';
         $s_label = 'background:#f4f7f6;color:#555555;font-size:10pt;font-weight:bold;text-align:left;';
@@ -241,7 +241,7 @@ if (in_array($export, ['xlsx', 'xls', 'pdf', 'csv'], true)) {
         .btn-hapus { background: #d9534f; }
         .alert-ok { background: #e6f7f0; color: #24b47e; padding: 10px; margin: 15px 0; border-radius: 5px; }
         .alert-err { background: #ffe6e6; color: #d93025; padding: 10px; margin: 15px 0; border-radius: 5px; }
- 
+
         .header-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin-top: 25px; }
         .export-group { display: flex; flex-wrap: wrap; gap: 8px; }
         .btn-exp { color: white; padding: 9px 14px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 13px; display: inline-flex; align-items: center; gap: 5px; }
@@ -259,9 +259,9 @@ if (in_array($export, ['xlsx', 'xls', 'pdf', 'csv'], true)) {
         <a href="logout.php" style="color:red;">Logout</a>
     </nav>
     <hr>
- 
+
     <h2><?= $edit_data ? 'Edit Data Produk' : 'Tambah Produk Baru' ?></h2>
- 
+
     <?php if (isset($_GET['status'])): ?>
         <div class="alert-ok">
             <?php
@@ -271,11 +271,11 @@ if (in_array($export, ['xlsx', 'xls', 'pdf', 'csv'], true)) {
             ?>
         </div>
     <?php endif; ?>
- 
+
     <?php if (!empty($pesan)): ?>
         <div class="alert-err"><?= htmlspecialchars($pesan) ?></div>
     <?php endif; ?>
- 
+
     <form method="POST" action="produk.php">
         <input type="hidden" name="id_edit" value="<?= $edit_data ? $edit_data['id'] : '' ?>">
         <input type="text" name="nama_produk" placeholder="Nama Produk" value="<?= $edit_data ? htmlspecialchars($edit_data['nama_produk']) : '' ?>" required>
@@ -288,7 +288,7 @@ if (in_array($export, ['xlsx', 'xls', 'pdf', 'csv'], true)) {
             <a href="produk.php" class="btn-batal">Batal</a>
         <?php endif; ?>
     </form>
- 
+
     <div class="header-bar">
         <h3 style="margin:0;">Daftar Produk</h3>
         <div class="export-group">
@@ -298,11 +298,11 @@ if (in_array($export, ['xlsx', 'xls', 'pdf', 'csv'], true)) {
             <a href="produk.php?export=pdf" class="btn-exp btn-pdf">📕 PDF (.pdf)</a>
         </div>
     </div>
- 
+
     <table>
         <thead>
             <tr>
-                <th>ID</th>
+                <th>No</th>
                 <th>Nama Produk</th>
                 <th>Harga</th>
                 <th>Stok</th>
@@ -311,9 +311,9 @@ if (in_array($export, ['xlsx', 'xls', 'pdf', 'csv'], true)) {
         </thead>
         <tbody>
             <?php if (count($produk_list) > 0): ?>
-                <?php foreach ($produk_list as $p): ?>
+                <?php foreach (array_values($produk_list) as $no => $p): ?>
                 <tr>
-                    <td><?= $p['id'] ?></td>
+                    <td><?= $no + 1 ?></td>
                     <td><?= htmlspecialchars($p['nama_produk']) ?></td>
                     <td>Rp <?= number_format($p['harga'], 0, ',', '.') ?></td>
                     <td><?= $p['stok'] ?></td>
