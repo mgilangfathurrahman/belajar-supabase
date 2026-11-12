@@ -189,7 +189,7 @@ if ($is_super) {
         <table>
             <thead>
                 <tr>
-                    <th>ID</th>
+                    <th>No</th>
                     <th>Pembeli & Kontak</th>
                     <th>Alamat</th>
                     <th>Produk</th>
@@ -202,9 +202,10 @@ if ($is_super) {
             </thead>
             <tbody>
                 <?php if (count($pesanan_list) > 0): ?>
+                    <?php $no = 1; ?>
                     <?php foreach ($pesanan_list as $ps): ?>
                     <tr>
-                        <td><?= $ps['id'] ?></td>
+                        <td><?= $no++ ?></td>
                         <td>
                             <strong><?= htmlspecialchars($ps['nama_pembeli']) ?></strong>
                             <div class="kontak-info">
