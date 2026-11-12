@@ -5,6 +5,7 @@ if (!isset($_COOKIE['admin_logged_in']) || $_COOKIE['admin_logged_in'] !== 'true
 }
 
 require 'koneksi.php';
+require_once __DIR__ . '/export_helpers.php';
 
 $admin_nama = $_COOKIE['admin_nama'] ?? ($_COOKIE['admin_username'] ?? 'Admin');
 $admin_role = $_COOKIE['admin_role'] ?? 'admin';
@@ -12,7 +13,7 @@ $is_super   = ($admin_role === 'superadmin');
 
 $pesan = "";
 
-// 1. Proses Batalkan Pesanan (Admin hanya bisa membatalkan inputannya sendiri)
+// 1. Proses Batalkan Pesanan
 if (isset($_GET['batal'])) {
     $id_pesanan = (int) $_GET['batal'];
     try {
@@ -47,7 +48,7 @@ if (isset($_GET['batal'])) {
     }
 }
 
-// 2. Proses Catat Pesanan Baru oleh Admin
+// 2. Proses Catat Pesanan Baru
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $nama_pembeli = trim($_POST['nama_pembeli']);
     $no_telp      = trim($_POST['no_telp'] ?? '-');
@@ -106,6 +107,137 @@ if ($is_super) {
     $stmt_ps = $pdo->prepare($sql_pesanan);
     $stmt_ps->execute([':oleh' => $admin_nama]);
     $pesanan_list = $stmt_ps->fetchAll();
+}
+
+// 4. Proses Ekspor 4 Format (.xlsx, .pdf, .xls, .csv)
+$export = $_GET['export'] ?? '';
+if ($export !== '') {
+    $total_omzet = 0;
+    foreach ($pesanan_list as $ps) {
+        $total_omzet += (int)$ps['total_harga'];
+    }
+    $total_trx   = count($pesanan_list);
+    $judul_lap   = $is_super ? 'Laporan Semua Pesanan - Toko Gilang' : 'Laporan Pesanan (' . $admin_nama . ') - Toko Gilang';
+    $judul_seksi = $is_super ? 'Daftar Semua Pesanan Masuk' : 'Daftar Pesanan Inputan ' . $admin_nama;
+
+    if ($export === 'xlsx') {
+        $kosong = fn(string $gaya) => xcell('', $gaya);
+        $rows = [];
+        $rows[] = [xcell($judul_lap, 'title')];
+        $rows[] = [xcell('Dicetak: ' . date('d-m-Y H:i'), 'muted')];
+        $rows[] = [];
+        $rows[] = [
+            xcell('Total Pendapatan', 'label'), $kosong('label'), $kosong('label'), $kosong('label'),
+            xcell('Total Pesanan', 'label'), $kosong('label'), $kosong('label'), $kosong('label'),
+        ];
+        $rows[] = [
+            xcell($total_omzet, 'bigrp'), $kosong('bigrp'), $kosong('bigrp'), $kosong('bigrp'),
+            xcell($total_trx . ' Pesanan', 'bigtext'), $kosong('bigtext'), $kosong('bigtext'), $kosong('bigtext'),
+        ];
+        $rows[] = [];
+        $rows[] = [xcell($judul_seksi, 'section')];
+        $rows[] = array_map(fn($h) => xcell($h, 'head'), ['No', 'Pembeli', 'No. Telp', 'Alamat', 'Produk', 'Qty', 'Total Harga', 'Diinput Oleh']);
+
+        foreach (array_values($pesanan_list) as $i => $r) {
+            $rows[] = [
+                xcell($i + 1, 'int'),
+                xcell((string)$r['nama_pembeli'], 'cell'),
+                xcell((string)($r['no_telp'] ?: '-'), 'cell'),
+                xcell((string)($r['alamat'] ?: '-'), 'cell'),
+                xcell((string)$r['nama_produk'], 'cell'),
+                xcell((int)$r['jumlah'], 'int'),
+                xcell((int)$r['total_harga'], 'rp'),
+                xcell((string)($r['dibuat_oleh'] ?? '-'), 'cell'),
+            ];
+        }
+
+        $lebar_kolom = array(8, 22, 16, 28, 24, 8, 18, 18);
+        $gabung_sel  = array('A1:H1', 'A2:H2', 'A4:D4', 'E4:H4', 'A5:D5', 'E5:H5', 'A7:H7');
+        $xlsx = buildXlsx($rows, array(), 'Data Pesanan', $lebar_kolom, $gabung_sel, false);
+        send_download($xlsx, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'Data-Pesanan-' . date('Y-m-d_H-i') . '.xlsx');
+    }
+
+    if ($export === 'pdf') {
+        $headers = array('No', 'Pembeli', 'No. Telp', 'Alamat', 'Produk', 'Qty', 'Total Harga', 'Diinput Oleh');
+        $widths  = array(35, 115, 85, 155, 130, 42, 110, 110);
+        $rows = [];
+        foreach (array_values($pesanan_list) as $i => $r) {
+            $rows[] = [
+                (string)($i + 1),
+                (string)$r['nama_pembeli'],
+                (string)($r['no_telp'] ?: '-'),
+                (string)($r['alamat'] ?: '-'),
+                (string)$r['nama_produk'],
+                (string)$r['jumlah'],
+                'Rp ' . number_format((int)$r['total_harga'], 0, ',', '.'),
+                (string)($r['dibuat_oleh'] ?? '-')
+            ];
+        }
+        $summary = [
+            ['Total Pendapatan', 'Rp ' . number_format($total_omzet, 0, ',', '.')],
+            ['Total Pesanan', $total_trx . ' Pesanan'],
+        ];
+        $pdf = buildPdf($judul_lap, $headers, $rows, $widths, null, $summary, $judul_seksi);
+        send_download($pdf, 'application/pdf', 'Data-Pesanan-' . date('Y-m-d_H-i') . '.pdf');
+    }
+
+    if ($export === 'xls') {
+        $filename = "Data-Pesanan-" . date('Y-m-d_H-i') . ".xls";
+        header("Content-Type: application/vnd.ms-excel; charset=utf-8");
+        header("Content-Disposition: attachment; filename=\"$filename\"");
+        $s_judul = 'font-size:18pt;font-weight:bold;';
+        $s_muted = 'font-size:10pt;color:#555555;';
+        $s_label = 'background:#f4f7f6;color:#555555;font-size:10pt;font-weight:bold;text-align:left;';
+        $s_nilai = 'background:#f4f7f6;font-size:16pt;font-weight:bold;text-align:left;mso-number-format:\@;';
+        $s_head  = 'background:#24b47e;color:#ffffff;font-weight:bold;border:1px solid #bbbbbb;padding:6px;text-align:left;';
+        $s_sel   = 'border:1px solid #bbbbbb;padding:6px;text-align:left;vertical-align:top;mso-number-format:\@;';
+        echo '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"></head><body>';
+        echo '<table style="border-collapse:collapse;font-family:Calibri,Arial,sans-serif;">';
+        echo '<tr><td colspan="9" style="' . $s_judul . '">' . htmlspecialchars($judul_lap) . '</td></tr>';
+        echo '<tr><td colspan="9" style="' . $s_muted . '">Dicetak: ' . date('d-m-Y H:i') . '</td></tr>';
+        echo '<tr><td colspan="9"></td></tr>';
+        echo '<tr><td colspan="4" bgcolor="#f4f7f6" style="' . $s_label . '">Total Pendapatan</td><td colspan="5" bgcolor="#f4f7f6" style="' . $s_label . '">Total Pesanan</td></tr>';
+        echo '<tr><td colspan="4" bgcolor="#f4f7f6" style="' . $s_nilai . '">Rp ' . number_format($total_omzet, 0, ',', '.') . '</td><td colspan="5" bgcolor="#f4f7f6" style="' . $s_nilai . '">' . $total_trx . ' Pesanan</td></tr>';
+        echo '<tr><td colspan="9"></td></tr><tr>';
+        foreach (['No', 'Pembeli', 'No. Telp', 'Email', 'Alamat', 'Produk', 'Qty', 'Total Harga', 'Diinput Oleh'] as $h) {
+            echo '<th bgcolor="#24b47e" style="' . $s_head . '"><font color="#FFFFFF">' . $h . '</font></th>';
+        }
+        echo '</tr>';
+ 
+	foreach (array_values($pesanan_list) as $i => $r) {
+            echo '<tr>';
+            echo '<td style="' . $s_sel . '">' . ($i + 1) . '</td>';
+            echo '<td style="' . $s_sel . '">' . htmlspecialchars($r['nama_pembeli']) . '</td>';
+            echo '<td style="' . $s_sel . '">' . htmlspecialchars($r['no_telp'] ?: '-') . '</td>';
+            echo '<td style="' . $s_sel . '">' . htmlspecialchars($r['email'] ?: '-') . '</td>';
+            echo '<td style="' . $s_sel . '">' . htmlspecialchars($r['alamat'] ?: '-') . '</td>';
+            echo '<td style="' . $s_sel . '">' . htmlspecialchars($r['nama_produk']) . '</td>';
+            echo '<td style="' . $s_sel . '">' . (int)$r['jumlah'] . '</td>';
+            echo '<td style="' . $s_sel . '">Rp ' . number_format((int)$r['total_harga'], 0, ',', '.') . '</td>';
+            echo '<td style="' . $s_sel . '">' . htmlspecialchars($r['dibuat_oleh'] ?? '-') . '</td>';
+            echo '</tr>';
+        }
+        echo '</table></body></html>';
+        exit;
+    }
+
+    if ($export === 'csv') {
+        $filename = "Data-Pesanan-" . date('Y-m-d_H-i') . ".csv";
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        $output = fopen('php://output', 'w');
+        fprintf($output, chr(0xEF).chr(0xBB).chr(0xBF));
+        fputcsv($output, ['No', 'Pembeli', 'No. Telp', 'Email', 'Alamat', 'Produk', 'Qty', 'Total Harga', 'Diinput Oleh', 'Waktu'], ';');
+        foreach (array_values($pesanan_list) as $i => $r) {
+            fputcsv($output, [
+                $i + 1, $r['nama_pembeli'], $r['no_telp'] ?: '-', $r['email'] ?: '-',
+                $r['alamat'] ?: '-', $r['nama_produk'], $r['jumlah'], $r['total_harga'],
+                $r['dibuat_oleh'] ?? '-', $r['tanggal']
+            ], ';');
+        }
+        fclose($output);
+        exit;
+    }
 }
 ?>
 <!DOCTYPE html>
