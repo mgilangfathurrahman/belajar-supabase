@@ -226,45 +226,8 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
             XLSX.writeFile(workbook, "Laporan-Penjualan-Toko-Gilang.xlsx");
         }
 
-        function downloadPDF() {
-            if (!window.jspdf) {
-                alert('Library PDF sedang dimuat, silakan periksa koneksi internet dan coba lagi.');
-                return;
-            }
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF('landscape');
-
-            doc.setFontSize(16);
-            doc.text("Laporan Penjualan - Toko Gilang", 14, 15);
-            doc.setFontSize(10);
-            doc.text("Dicetak pada: " + new Date().toLocaleString('id-ID'), 14, 22);
-
-            let totalSemua = 0;
-            const tableBody = dataLaporan.map(item => {
-                totalSemua += Number(item.total_harga);
-                return [
-                    item.id,
-                    item.nama_pembeli,
-                    item.no_telp || '-',
-                    item.alamat || '-',
-                    item.nama_produk,
-                    item.jumlah,
-                    formatRupiah(item.total_harga),
-                    item.tanggal
-                ];
-            });
-
-            tableBody.push(['', '', '', '', '', 'TOTAL', formatRupiah(totalSemua), '']);
-
-            doc.autoTable({
-                startY: 28,
-                head: [['ID', 'Pembeli', 'No. Telp', 'Alamat', 'Produk', 'Qty', 'Total Harga', 'Waktu']],
-                body: tableBody,
-                headStyles: { fillColor: '#24b47e' },
-                styles: { fontSize: 9 }
-            });
-
-            doc.save("Laporan-Penjualan-Toko-Gilang.pdf");
+     function downloadPDF() {
+            window.print();
         }
 
         async function muatDataRealTime() {
