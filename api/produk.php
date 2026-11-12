@@ -142,11 +142,11 @@ $produk_list = $pdo->query("SELECT * FROM produk ORDER BY id DESC")->fetchAll();
         <?php endif; ?>
     </form>
 
-    <h3>Daftar Stok Produk</h3>
+     <h3>Daftar Stok Produk</h3>
     <table>
         <thead>
             <tr>
-                <th>ID</th>
+                <th>No</th>
                 <th>Nama Produk</th>
                 <th>Harga</th>
                 <th>Stok</th>
@@ -156,9 +156,10 @@ $produk_list = $pdo->query("SELECT * FROM produk ORDER BY id DESC")->fetchAll();
         </thead>
         <tbody>
             <?php if (count($produk_list) > 0): ?>
+                <?php $no = 1; ?>
                 <?php foreach ($produk_list as $p): ?>
                 <tr>
-                    <td><?= $p['id'] ?></td>
+                    <td><?= $no++ ?></td>
                     <td><?= htmlspecialchars($p['nama_produk']) ?></td>
                     <td>Rp <?= number_format($p['harga'], 0, ',', '.') ?></td>
                     <td><?= $p['stok'] ?></td>
