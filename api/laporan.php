@@ -5,6 +5,7 @@ if (!isset($_COOKIE['admin_logged_in']) || $_COOKIE['admin_logged_in'] !== 'true
 }
 
 require 'koneksi.php';
+require_once __DIR__ . '/export_helpers.php';
 
 // Ambil seluruh data transaksi
 $sql_semua = "SELECT pesanan.id, pesanan.nama_pembeli, pesanan.no_telp, pesanan.email, pesanan.alamat, 
@@ -14,10 +15,10 @@ $sql_semua = "SELECT pesanan.id, pesanan.nama_pembeli, pesanan.no_telp, pesanan.
               ORDER BY pesanan.id DESC";
 $semua_pesanan = $pdo->query($sql_semua)->fetchAll();
 
-// 1. Proses Download .XLSX Murni (Pure PHP ZIP Builder - Tanpa ZipArchive & Tanpa CDN)
-if (isset($_GET['export']) && $_GET['export'] === 'xlsx') {
-    $filename = "Laporan-Penjualan-Toko-Gilang-" . date('Y-m-d_H-i') . ".xlsx";
-    
+$export = $_GET['export'] ?? '';
+
+// 1. Download .XLSX (murni PHP, tanpa ZipArchive & tanpa CDN)
+if ($export === 'xlsx') {
     $rows = [
         ['ID', 'Nama Pembeli', 'No. Telepon', 'Email', 'Alamat Pengiriman', 'Nama Produk', 'Jumlah', 'Total Harga (Rp)', 'Waktu Transaksi']
     ];
@@ -38,73 +39,43 @@ if (isset($_GET['export']) && $_GET['export'] === 'xlsx') {
     }
     $rows[] = ['', '', '', '', '', '', 'TOTAL PENDAPATAN', $grand_total, ''];
 
-    $sheetXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-              . '<worksheet xmlns="http://openxmlformats.org">'
-              . '<sheetData>';
-    foreach ($rows as $rowIdx => $row) {
-        $rNum = $rowIdx + 1;
-        $sheetXml .= '<row r="' . $rNum . '">';
-        foreach ($row as $colIdx => $val) {
-            $colLetter = chr(65 + $colIdx);
-            $cellRef = $colLetter . $rNum;
-            if (is_int($val)) {
-                $sheetXml .= '<c r="' . $cellRef . '"><v>' . $val . '</v></c>';
-            } else {
-                $escaped = htmlspecialchars((string)$val, ENT_XML1 | ENT_QUOTES, 'UTF-8');
-                $sheetXml .= '<c r="' . $cellRef . '" t="inlineStr"><is><t>' . $escaped . '</t></is></c>';
-            }
-        }
-        $sheetXml .= '</row>';
-    }
-    $sheetXml .= '</sheetData></worksheet>';
-
-    $files = [
-        '[Content_Types].xml' => '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://openxmlformats.org"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>',
-        '_rels/.rels' => '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://openxmlformats.org"><Relationship Id="rId1" Type="http://openxmlformats.org" Target="xl/workbook.xml"/></Relationships>',
-        'xl/workbook.xml' => '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://openxmlformats.org" xmlns:r="http://openxmlformats.org"><sheets><sheet name="Laporan Penjualan" sheetId="1" r:id="rId1"/></sheets></workbook>',
-        'xl/_rels/workbook.xml.rels' => '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://openxmlformats.org"><Relationship Id="rId1" Type="http://openxmlformats.org/worksheet" Target="worksheets/sheet1.xml"/></Relationships>',
-        'xl/worksheets/sheet1.xml' => $sheetXml
-    ];
-
-    // Rakitan biner ZIP murni menggunakan gzdeflate & crc32
-    $zipData = '';
-    $centralDir = '';
-    $offset = 0;
-    $count = 0;
-
-    foreach ($files as $name => $content) {
-        $crc = crc32($content);
-        $uncompSize = strlen($content);
-        $compContent = gzdeflate($content);
-        $compSize = strlen($compContent);
-        $nameLen = strlen($name);
-
-        $localHeader = "\x50\x4b\x03\x04\x14\x00\x00\x00\x08\x00\x00\x00\x00\x00"
-                     . pack('VVVvv', $crc, $compSize, $uncompSize, $nameLen, 0)
-                     . $name;
-        $zipData .= $localHeader . $compContent;
-
-        $centralDir .= "\x50\x4b\x01\x02\x00\x00\x14\x00\x00\x00\x08\x00\x00\x00\x00\x00"
-                     . pack('VVVvvvvvVV', $crc, $compSize, $uncompSize, $nameLen, 0, 0, 0, 0, 0, $offset)
-                     . $name;
-        $offset = strlen($zipData);
-        $count++;
-    }
-
-    $eocd = "\x50\x4b\x05\x06\x00\x00\x00\x00"
-          . pack('vvVVv', $count, $count, strlen($centralDir), strlen($zipData), 0);
-    $finalXlsx = $zipData . $centralDir . $eocd;
-
-    if (ob_get_length()) ob_end_clean();
-    header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    header('Content-Disposition: attachment; filename="' . $filename . '"');
-    header('Content-Length: ' . strlen($finalXlsx));
-    echo $finalXlsx;
-    exit;
+    $xlsx = buildXlsx($rows, [0, count($rows) - 1], 'Laporan Penjualan');
+    send_download(
+        $xlsx,
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Laporan-Penjualan-Toko-Gilang-' . date('Y-m-d_H-i') . '.xlsx'
+    );
 }
 
-// 2. Proses Download .XLS (HTML Table Berwarna)
-if (isset($_GET['export']) && $_GET['export'] === 'xls') {
+// 2. Download .PDF (file PDF asli, bukan dialog cetak)
+if ($export === 'pdf') {
+    $headers = ['ID', 'Nama Pembeli', 'No. Telepon', 'Email', 'Alamat', 'Produk', 'Jml', 'Total Harga', 'Waktu'];
+    $widths  = [30, 100, 75, 120, 157, 105, 35, 75, 85]; // total 782 pt (A4 landscape)
+
+    $rows = [];
+    $grand_total = 0;
+    foreach ($semua_pesanan as $r) {
+        $grand_total += (int)$r['total_harga'];
+        $rows[] = [
+            (string)$r['id'],
+            (string)$r['nama_pembeli'],
+            (string)($r['no_telp'] ?: '-'),
+            (string)($r['email'] ?: '-'),
+            (string)($r['alamat'] ?: '-'),
+            (string)$r['nama_produk'],
+            (string)$r['jumlah'],
+            'Rp ' . number_format((int)$r['total_harga'], 0, ',', '.'),
+            (string)$r['tanggal']
+        ];
+    }
+    $totalRow = ['', '', '', '', '', 'TOTAL PENDAPATAN', '', 'Rp ' . number_format($grand_total, 0, ',', '.'), ''];
+
+    $pdf = buildPdf('Laporan Penjualan - Toko Gilang', $headers, $rows, $widths, $totalRow);
+    send_download($pdf, 'application/pdf', 'Laporan-Penjualan-' . date('Y-m-d_H-i') . '.pdf');
+}
+
+// 3. Proses Download .XLS (HTML Table Berwarna)
+if ($export === 'xls') {
     $filename = "Laporan-Penjualan-" . date('Y-m-d_H-i') . ".xls";
     header("Content-Type: application/vnd.ms-excel; charset=utf-8");
     header("Content-Disposition: attachment; filename=\"$filename\"");
@@ -157,8 +128,8 @@ if (isset($_GET['export']) && $_GET['export'] === 'xls') {
     exit;
 }
 
-// 3. Proses Download .CSV
-if (isset($_GET['export']) && $_GET['export'] === 'csv') {
+// 4. Proses Download .CSV
+if ($export === 'csv') {
     $filename = "Laporan-Penjualan-" . date('Y-m-d_H-i') . ".csv";
     header('Content-Type: text/csv; charset=utf-8');
     header('Content-Disposition: attachment; filename="' . $filename . '"');
@@ -203,12 +174,6 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
         th, td { border: 1px solid #ddd; padding: 10px; text-align: left; font-size: 14px; }
         th { background: #24b47e; color: white; }
         .badge { background: #e6f7f0; color: #24b47e; padding: 4px 8px; font-size: 12px; border-radius: 4px; vertical-align: middle; }
-
-        @media print {
-            nav, .export-group, .badge, hr { display: none !important; }
-            body { margin: 0; padding: 0; }
-            th { background-color: #24b47e !important; color: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-        }
     </style>
 </head>
 <body>
@@ -227,7 +192,7 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
             <a href="laporan.php?export=xlsx" class="btn-exp btn-xlsx">📊 Excel (.xlsx)</a>
             <a href="laporan.php?export=xls" class="btn-exp btn-xls">📗 Excel (.xls)</a>
             <a href="laporan.php?export=csv" class="btn-exp btn-csv">📄 CSV (.csv)</a>
-            <button onclick="window.print()" class="btn-exp btn-pdf">📕 PDF (.pdf)</button>
+            <a href="laporan.php?export=pdf" class="btn-exp btn-pdf">📕 PDF (.pdf)</a>
         </div>
     </div>
     
