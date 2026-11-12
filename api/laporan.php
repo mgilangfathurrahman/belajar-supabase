@@ -11,7 +11,7 @@ $admin_nama = $_COOKIE['admin_nama'] ?? ($_COOKIE['admin_username'] ?? 'Admin');
 $admin_role = $_COOKIE['admin_role'] ?? 'admin';
 $is_super   = ($admin_role === 'superadmin');
 
-// 1. Ambil Seluruh Data Transaksi Sesuai Hak Akses (Tanpa Batas 5)
+// 1. Ambil Seluruh Data Transaksi Sesuai Hak Akses
 if ($is_super) {
     $sql_semua = "SELECT pesanan.id, pesanan.nama_pembeli, pesanan.no_telp, pesanan.email, pesanan.alamat, 
                          produk.nama_produk, pesanan.jumlah, pesanan.total_harga, pesanan.tanggal, pesanan.dibuat_oleh 
@@ -74,14 +74,9 @@ if ($export === 'xlsx') {
         ];
     }
 
-    $xlsx = buildXlsx(
-        $rows,
-        [],
-        'Laporan Penjualan',
-,
-        ['A1:G1', 'A2:G2', 'A4:C4', 'D4:G4', 'A5:C5', 'D5:G5', 'A7:G7'],
-        false
-    );
+    $lebar_kolom = array(8, 22, 30, 10, 18, 18, 22);
+    $gabung_sel  = array('A1:G1', 'A2:G2', 'A4:C4', 'D4:G4', 'A5:C5', 'D5:G5', 'A7:G7');
+    $xlsx = buildXlsx($rows, array(), 'Laporan Penjualan', $lebar_kolom, $gabung_sel, false);
     send_download(
         $xlsx,
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -91,8 +86,8 @@ if ($export === 'xlsx') {
 
 // 3. Download .PDF
 if ($export === 'pdf') {
-    $headers = ['No', 'Pembeli', 'Produk', 'Jumlah', 'Total', 'Diinput Oleh', 'Waktu'];
-    $widths  =; // Total 782 pt
+    $headers = array('No', 'Pembeli', 'Produk', 'Jumlah', 'Total', 'Diinput Oleh', 'Waktu');
+    $widths  = array(35, 130, 195, 52, 110, 110, 150);
 
     $rows = [];
     foreach (array_values($data_export) as $i => $r) {
@@ -128,44 +123,32 @@ if ($export === 'xls') {
     $s_seksi = 'font-size:13pt;font-weight:bold;';
     $s_head  = 'background:#24b47e;color:#ffffff;font-weight:bold;border:1px solid #bbbbbb;padding:6px;text-align:left;';
     $s_sel   = 'border:1px solid #bbbbbb;padding:6px;text-align:left;vertical-align:top;mso-number-format:\@;';
-    ?>
-    <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">
-    <head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"></head>
-    <body>
-        <table style="border-collapse:collapse;font-family:Calibri,Arial,sans-serif;">
-            <tr><td colspan="7" style="<?= $s_judul ?>"><?= htmlspecialchars($judul_lap) ?></td></tr>
-            <tr><td colspan="7" style="<?= $s_muted ?>">Dicetak: <?= date('d-m-Y H:i') ?></td></tr>
-            <tr><td colspan="7"></td></tr>
-            <tr>
-                <td colspan="3" bgcolor="#f4f7f6" style="<?= $s_label ?>">Total Pendapatan</td>
-                <td colspan="4" bgcolor="#f4f7f6" style="<?= $s_label ?>">Total Transaksi</td>
-            </tr>
-            <tr>
-                <td colspan="3" bgcolor="#f4f7f6" style="<?= $s_nilai ?>">Rp <?= number_format($total_omzet_semua, 0, ',', '.') ?></td>
-                <td colspan="4" bgcolor="#f4f7f6" style="<?= $s_nilai ?>"><?= $total_transaksi_semua ?> Pesanan</td>
-            </tr>
-            <tr><td colspan="7"></td></tr>
-            <tr><td colspan="7" style="<?= $s_seksi ?>"><?= htmlspecialchars($judul_tabel) ?></td></tr>
-            <tr>
-                <?php foreach (['No', 'Pembeli', 'Produk', 'Jumlah', 'Total', 'Diinput Oleh', 'Waktu'] as $h): ?>
-                <th bgcolor="#24b47e" style="<?= $s_head ?>"><font color="#FFFFFF"><?= $h ?></font></th>
-                <?php endforeach; ?>
-            </tr>
-            <?php foreach (array_values($data_export) as $i => $row): ?>
-            <tr>
-                <td style="<?= $s_sel ?>"><?= $i + 1 ?></td>
-                <td style="<?= $s_sel ?>"><?= htmlspecialchars($row['nama_pembeli']) ?></td>
-                <td style="<?= $s_sel ?>"><?= htmlspecialchars($row['nama_produk']) ?></td>
-                <td style="<?= $s_sel ?>"><?= (int)$row['jumlah'] ?></td>
-                <td style="<?= $s_sel ?>">Rp <?= number_format((int)$row['total_harga'], 0, ',', '.') ?></td>
-                <td style="<?= $s_sel ?>"><?= htmlspecialchars($row['dibuat_oleh'] ?? '-') ?></td>
-                <td style="<?= $s_sel ?>"><?= htmlspecialchars(substr((string)$row['tanggal'], 0, 19)) ?></td>
-            </tr>
-            <?php endforeach; ?>
-        </table>
-    </body>
-    </html>
-    <?php
+
+    echo '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"></head><body>';
+    echo '<table style="border-collapse:collapse;font-family:Calibri,Arial,sans-serif;">';
+    echo '<tr><td colspan="7" style="' . $s_judul . '">' . htmlspecialchars($judul_lap) . '</td></tr>';
+    echo '<tr><td colspan="7" style="' . $s_muted . '">Dicetak: ' . date('d-m-Y H:i') . '</td></tr>';
+    echo '<tr><td colspan="7"></td></tr>';
+    echo '<tr><td colspan="3" bgcolor="#f4f7f6" style="' . $s_label . '">Total Pendapatan</td><td colspan="4" bgcolor="#f4f7f6" style="' . $s_label . '">Total Transaksi</td></tr>';
+    echo '<tr><td colspan="3" bgcolor="#f4f7f6" style="' . $s_nilai . '">Rp ' . number_format($total_omzet_semua, 0, ',', '.') . '</td><td colspan="4" bgcolor="#f4f7f6" style="' . $s_nilai . '">' . $total_transaksi_semua . ' Pesanan</td></tr>';
+    echo '<tr><td colspan="7"></td></tr>';
+    echo '<tr><td colspan="7" style="' . $s_seksi . '">' . htmlspecialchars($judul_tabel) . '</td></tr><tr>';
+    foreach (['No', 'Pembeli', 'Produk', 'Jumlah', 'Total', 'Diinput Oleh', 'Waktu'] as $h) {
+        echo '<th bgcolor="#24b47e" style="' . $s_head . '"><font color="#FFFFFF">' . $h . '</font></th>';
+    }
+    echo '</tr>';
+    foreach (array_values($data_export) as $i => $row) {
+        echo '<tr>';
+        echo '<td style="' . $s_sel . '">' . ($i + 1) . '</td>';
+        echo '<td style="' . $s_sel . '">' . htmlspecialchars($row['nama_pembeli']) . '</td>';
+        echo '<td style="' . $s_sel . '">' . htmlspecialchars($row['nama_produk']) . '</td>';
+        echo '<td style="' . $s_sel . '">' . (int)$row['jumlah'] . '</td>';
+        echo '<td style="' . $s_sel . '">Rp ' . number_format((int)$row['total_harga'], 0, ',', '.') . '</td>';
+        echo '<td style="' . $s_sel . '">' . htmlspecialchars($row['dibuat_oleh'] ?? '-') . '</td>';
+        echo '<td style="' . $s_sel . '">' . htmlspecialchars(substr((string)$row['tanggal'], 0, 19)) . '</td>';
+        echo '</tr>';
+    }
+    echo '</table></body></html>';
     exit;
 }
 
