@@ -18,7 +18,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt->execute([':user' => $username]);
         $admin = $stmt->fetch();
 
-        if ($admin && password_verify($password, $admin['password_hash'])) {
+        if ($admin && password_verify($password, $admin['password'])) {
             // Simpan status login di Cookie Browser selama 1 hari (86400 detik)
             setcookie('admin_logged_in', 'true', time() + 86400, "/");
             setcookie('admin_username', $admin['username'], time() + 86400, "/");
