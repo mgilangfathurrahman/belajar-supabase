@@ -14,7 +14,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $password = $_POST['password'];
 
     try {
-        $stmt = $pdo->prepare("SELECT * FROM admin WHERE username = :user");
+        $stmt = $pdo->prepare("SELECT * FROM admin_users WHERE username = :user");
         $stmt->execute([':user' => $username]);
         $admin = $stmt->fetch();
 
