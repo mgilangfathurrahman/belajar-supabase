@@ -6,7 +6,7 @@ if (!isset($_COOKIE['admin_logged_in']) || $_COOKIE['admin_logged_in'] !== 'true
 
 require 'koneksi.php';
 
-// Ambil seluruh data transaksi untuk kebutuhan ekspor
+// Ambil seluruh data transaksi
 $sql_semua = "SELECT pesanan.id, pesanan.nama_pembeli, pesanan.no_telp, pesanan.email, pesanan.alamat, 
                      produk.nama_produk, pesanan.jumlah, pesanan.total_harga, pesanan.tanggal 
               FROM pesanan 
@@ -14,7 +14,72 @@ $sql_semua = "SELECT pesanan.id, pesanan.nama_pembeli, pesanan.no_telp, pesanan.
               ORDER BY pesanan.id DESC";
 $semua_pesanan = $pdo->query($sql_semua)->fetchAll();
 
-// 1. Proses Download .XLS (HTML Table Berwarna)
+// 1. Proses Download .XLSX Murni (PHP ZipArchive - Bebas Peringatan Excel & Tanpa CDN)
+if (isset($_GET['export']) && $_GET['export'] === 'xlsx') {
+    $filename = "Laporan-Penjualan-Toko-Gilang-" . date('Y-m-d_H-i') . ".xlsx";
+    
+    // Susun baris data
+    $rows = [
+        ['ID', 'Nama Pembeli', 'No. Telepon', 'Email', 'Alamat Pengiriman', 'Nama Produk', 'Jumlah', 'Total Harga (Rp)', 'Waktu Transaksi']
+    ];
+    $grand_total = 0;
+    foreach ($semua_pesanan as $r) {
+        $grand_total += (int)$r['total_harga'];
+        $rows[] = [
+            (string)$r['id'],
+            (string)$r['nama_pembeli'],
+            (string)($r['no_telp'] ?: '-'),
+            (string)($r['email'] ?: '-'),
+            (string)($r['alamat'] ?: '-'),
+            (string)$r['nama_produk'],
+            (int)$r['jumlah'],
+            (int)$r['total_harga'],
+            (string)$r['tanggal']
+        ];
+    }
+    $rows[] = ['', '', '', '', '', '', 'TOTAL PENDAPATAN', $grand_total, ''];
+
+    // Buat XML Worksheet
+    $sheetXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+              . '<worksheet xmlns="http://openxmlformats.org">'
+              . '<sheetData>';
+    foreach ($rows as $rowIdx => $row) {
+        $rNum = $rowIdx + 1;
+        $sheetXml .= '<row r="' . $rNum . '">';
+        foreach ($row as $colIdx => $val) {
+            $colLetter = chr(65 + $colIdx);
+            $cellRef = $colLetter . $rNum;
+            if (is_int($val)) {
+                $sheetXml .= '<c r="' . $cellRef . '"><v>' . $val . '</v></c>';
+            } else {
+                $escaped = htmlspecialchars((string)$val, ENT_XML1 | ENT_QUOTES, 'UTF-8');
+                $sheetXml .= '<c r="' . $cellRef . '" t="inlineStr"><is><t>' . $escaped . '</t></is></c>';
+            }
+        }
+        $sheetXml .= '</row>';
+    }
+    $sheetXml .= '</sheetData></worksheet>';
+
+    $tmpFile = tempnam(sys_get_temp_dir(), 'xlsx');
+    $zip = new ZipArchive();
+    if ($zip->open($tmpFile, ZipArchive::OVERWRITE) === true) {
+        $zip->addFromString('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://openxmlformats.org"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>');
+        $zip->addFromString('_rels/.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://openxmlformats.org"><Relationship Id="rId1" Type="http://openxmlformats.org" Target="xl/workbook.xml"/></Relationships>');
+        $zip->addFromString('xl/workbook.xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://openxmlformats.org" xmlns:r="http://openxmlformats.org"><sheets><sheet name="Laporan Penjualan" sheetId="1" r:id="rId1"/></sheets></workbook>');
+        $zip->addFromString('xl/_rels/workbook.xml.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://openxmlformats.org"><Relationship Id="rId1" Type="http://openxmlformats.org/worksheet" Target="worksheets/sheet1.xml"/></Relationships>');
+        $zip->addFromString('xl/worksheets/sheet1.xml', $sheetXml);
+        $zip->close();
+
+        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Content-Length: ' . filesize($tmpFile));
+        readfile($tmpFile);
+        unlink($tmpFile);
+        exit;
+    }
+}
+
+// 2. Proses Download .XLS (HTML Table Berwarna)
 if (isset($_GET['export']) && $_GET['export'] === 'xls') {
     $filename = "Laporan-Penjualan-" . date('Y-m-d_H-i') . ".xls";
     header("Content-Type: application/vnd.ms-excel; charset=utf-8");
@@ -30,22 +95,6 @@ if (isset($_GET['export']) && $_GET['export'] === 'xls') {
             th { background-color: #24b47e; color: #ffffff; font-weight: bold; border: 1px solid #000000; padding: 10px; }
             td { border: 1px solid #000000; padding: 8px; }
             .str { mso-number-format:\@; }
-                    /* Aturan otomatis menyembunyikan menu & tombol saat dicetak ke PDF */
-        @media print {
-            nav, .export-group, .badge, hr {
-                display: none !important;
-            }
-            body {
-                margin: 0;
-                padding: 0;
-            }
-            th {
-                background-color: #24b47e !important;
-                color: white !important;
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-            }
-        }
         </style>
     </head>
     <body>
@@ -84,7 +133,7 @@ if (isset($_GET['export']) && $_GET['export'] === 'xls') {
     exit;
 }
 
-// 2. Proses Download .CSV (Pemisah Titik Koma agar Rapi di Excel Indonesia)
+// 3. Proses Download .CSV
 if (isset($_GET['export']) && $_GET['export'] === 'csv') {
     $filename = "Laporan-Penjualan-" . date('Y-m-d_H-i') . ".csv";
     header('Content-Type: text/csv; charset=utf-8');
@@ -108,10 +157,6 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Laporan Penjualan Real-Time - Toko Gilang</title>
-    <!-- Library SheetJS untuk XLSX Asli & jsPDF untuk PDF -->
-    <script src="https://jsdelivr.net"></script>
-    <script src="https://cloudflare.com"></script>
-    <script src="https://cloudflare.com"></script>
     <style>
         body { font-family: sans-serif; margin: 20px 40px; }
         nav a { margin-right: 15px; text-decoration: none; font-weight: bold; color: #24b47e; }
@@ -134,6 +179,12 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
         th, td { border: 1px solid #ddd; padding: 10px; text-align: left; font-size: 14px; }
         th { background: #24b47e; color: white; }
         .badge { background: #e6f7f0; color: #24b47e; padding: 4px 8px; font-size: 12px; border-radius: 4px; vertical-align: middle; }
+
+        @media print {
+            nav, .export-group, .badge, hr { display: none !important; }
+            body { margin: 0; padding: 0; }
+            th { background-color: #24b47e !important; color: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        }
     </style>
 </head>
 <body>
@@ -149,10 +200,10 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
     <div class="header-bar">
         <h2 style="margin:0;">Dashboard Penjualan <span class="badge">● Live Real-Time</span></h2>
         <div class="export-group">
-            <button onclick="downloadXLSX()" class="btn-exp btn-xlsx">📊 Excel (.xlsx)</button>
+            <a href="laporan.php?export=xlsx" class="btn-exp btn-xlsx">📊 Excel (.xlsx)</a>
             <a href="laporan.php?export=xls" class="btn-exp btn-xls">📗 Excel (.xls)</a>
             <a href="laporan.php?export=csv" class="btn-exp btn-csv">📄 CSV (.csv)</a>
-            <button onclick="downloadPDF()" class="btn-exp btn-pdf">📕 PDF (.pdf)</button>
+            <button onclick="window.print()" class="btn-exp btn-pdf">📕 PDF (.pdf)</button>
         </div>
     </div>
     
@@ -185,49 +236,8 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
     </table>
 
     <script>
-        const dataLaporan = <?= json_encode($semua_pesanan, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
-
         function formatRupiah(angka) {
             return 'Rp ' + Number(angka).toLocaleString('id-ID');
-        }
-
-        function downloadXLSX() {
-            if (typeof XLSX === 'undefined') {
-                alert('Library Excel sedang dimuat, silakan coba klik beberapa detik lagi atau gunakan tombol Excel (.xls).');
-                return;
-            }
-            let totalSemua = 0;
-            const rows = dataLaporan.map(item => {
-                totalSemua += Number(item.total_harga);
-                return {
-                    'ID': item.id,
-                    'Nama Pembeli': item.nama_pembeli,
-                    'No. Telepon': item.no_telp || '-',
-                    'Email': item.email || '-',
-                    'Alamat Pengiriman': item.alamat || '-',
-                    'Nama Produk': item.nama_produk,
-                    'Jumlah': Number(item.jumlah),
-                    'Total Harga (Rp)': Number(item.total_harga),
-                    'Waktu Transaksi': item.tanggal
-                };
-            });
-
-            rows.push({
-                'ID': '', 'Nama Pembeli': '', 'No. Telepon': '', 'Email': '',
-                'Alamat Pengiriman': '', 'Nama Produk': '',
-                'Jumlah': 'TOTAL PENDAPATAN',
-                'Total Harga (Rp)': totalSemua,
-                'Waktu Transaksi': ''
-            });
-
-            const worksheet = XLSX.utils.json_to_sheet(rows);
-            const workbook = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(workbook, worksheet, "Laporan Penjualan");
-            XLSX.writeFile(workbook, "Laporan-Penjualan-Toko-Gilang.xlsx");
-        }
-
-     function downloadPDF() {
-            window.print();
         }
 
         async function muatDataRealTime() {
