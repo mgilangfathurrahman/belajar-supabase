@@ -326,17 +326,20 @@ if ($export !== '') {
                     <td>Rp <?= number_format($p['harga'], 0, ',', '.') ?></td>
                     <td><?= $p['stok'] ?></td>
                     <td><strong><?= htmlspecialchars($p['dibuat_oleh'] ?? '-') ?></strong></td>
-                   <td>
-                        <?php if ($is_super || ($p['dibuat_oleh'] ?? '') === $admin_nama): ?>
-                            <a href="produk.php?edit=<?= $p['id'] ?>" class="btn-aksi btn-edit">Edit</a>
-                        <?php else: ?>
-                            <span style="color:#888; font-size:12px;">Hanya Lihat</span>
-                        <?php endif; ?>
+<td>
+    <?php if ($is_super || trim($p['dibuat_oleh'] ?? '') === trim($admin_nama)): ?>
+        <?php $sedang_diedit = ($edit_data && (int)$edit_data['id'] === (int)$p['id']); ?>
+        <a href="produk.php?edit=<?= $p['id'] ?>" class="btn-aksi <?= $sedang_diedit ? 'btn-edit-aktif' : 'btn-edit' ?>">
+            <?= $sedang_diedit ? 'Sedang Diedit' : 'Edit' ?>
+        </a>
+    <?php else: ?>
+        <span style="color:#888; font-size:12px;">Hanya Lihat</span>
+    <?php endif; ?>
 
-                        <?php if ($is_super): ?>
-                            <a href="produk.php?hapus=<?= $p['id'] ?>" class="btn-aksi btn-hapus" onclick="return confirm('Yakin ingin menghapus produk ini?')">Hapus</a>
-                        <?php endif; ?>
-                    </td>
+    <?php if ($is_super): ?>
+        <a href="produk.php?hapus=<?= $p['id'] ?>" class="btn-aksi btn-hapus" onclick="return confirm('Yakin ingin menghapus produk ini?')">Hapus</a>
+    <?php endif; ?>
+</td>
                 </tr>
                 <?php endforeach; ?>
             <?php else: ?>
