@@ -74,6 +74,149 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $produk_list = $pdo->query("SELECT * FROM produk ORDER BY id DESC")->fetchAll();
+$export = $_GET['export'] ?? '';
+
+if ($export !== '') {
+    $total_jenis = count($produk_list);
+    $total_stok  = 0;
+    $total_aset  = 0;
+    foreach ($produk_list as $p) {
+        $total_stok += (int)$p['stok'];
+        $total_aset += ((int)$p['harga'] * (int)$p['stok']);
+    }
+
+    // 1. Download .XLSX
+    if ($export === 'xlsx') {
+        $kosong = fn(string $gaya) => xcell('', $gaya);
+        $rows = [];
+        $rows[] = [xcell('Laporan Stok Produk - Toko Gilang', 'title')];
+        $rows[] = [xcell('Dicetak: ' . date('d-m-Y H:i'), 'muted')];
+        $rows[] = [];
+        $rows[] = [
+            xcell('Total Nilai Aset', 'label'), $kosong('label'), $kosong('label'),
+            xcell('Total Sisa Stok', 'label'), $kosong('label'), $kosong('label'),
+        ];
+        $rows[] = [
+            xcell($total_aset, 'bigrp'), $kosong('bigrp'), $kosong('bigrp'),
+            xcell($total_stok . ' Unit (' . $total_jenis . ' Produk)', 'bigtext'), $kosong('bigtext'), $kosong('bigtext'),
+        ];
+        $rows[] = [];
+        $rows[] = [xcell('Daftar Stok Produk', 'section')];
+        $rows[] = array_map(fn($h) => xcell($h, 'head'), ['No', 'Nama Produk', 'Harga', 'Stok', 'Nilai Aset', 'Dibuat Oleh']);
+
+        foreach (array_values($produk_list) as $i => $p) {
+            $nilai = (int)$p['harga'] * (int)$p['stok'];
+            $rows[] = [
+                xcell($i + 1, 'int'),
+                xcell((string)$p['nama_produk'], 'cell'),
+                xcell((int)$p['harga'], 'rp'),
+                xcell((int)$p['stok'], 'int'),
+                xcell($nilai, 'rp'),
+                xcell((string)($p['dibuat_oleh'] ?? '-'), 'cell'),
+            ];
+        }
+
+        $xlsx = buildXlsx(
+            $rows,
+            [],
+            'Data Produk',
+,
+            ['A1:F1', 'A2:F2', 'A4:C4', 'D4:F4', 'A5:C5', 'D5:F5', 'A7:F7'],
+            false
+        );
+        send_download($xlsx, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'Laporan-Produk-' . date('Y-m-d_H-i') . '.xlsx');
+    }
+
+    // 2. Download .PDF
+    if ($export === 'pdf') {
+        $headers = ['No', 'Nama Produk', 'Harga', 'Stok', 'Nilai Aset', 'Dibuat Oleh'];
+        $widths  =; // Total 782 pt
+        $rows = [];
+        foreach (array_values($produk_list) as $i => $p) {
+            $nilai = (int)$p['harga'] * (int)$p['stok'];
+            $rows[] = [
+                (string)($i + 1),
+                (string)$p['nama_produk'],
+                'Rp ' . number_format((int)$p['harga'], 0, ',', '.'),
+                (string)$p['stok'],
+                'Rp ' . number_format($nilai, 0, ',', '.'),
+                (string)($p['dibuat_oleh'] ?? '-')
+            ];
+        }
+        $summary = [
+            ['Total Nilai Aset', 'Rp ' . number_format($total_aset, 0, ',', '.')],
+            ['Total Sisa Stok', $total_stok . ' Unit (' . $total_jenis . ' Produk)'],
+        ];
+        $pdf = buildPdf('Laporan Stok Produk - Toko Gilang', $headers, $rows, $widths, null, $summary, 'Daftar Stok Produk');
+        send_download($pdf, 'application/pdf', 'Laporan-Produk-' . date('Y-m-d_H-i') . '.pdf');
+    }
+
+    // 3. Download .XLS
+    if ($export === 'xls') {
+        $filename = "Laporan-Produk-" . date('Y-m-d_H-i') . ".xls";
+        header("Content-Type: application/vnd.ms-excel; charset=utf-8");
+        header("Content-Disposition: attachment; filename=\"$filename\"");
+        $s_judul = 'font-size:18pt;font-weight:bold;';
+        $s_muted = 'font-size:10pt;color:#555555;';
+        $s_label = 'background:#f4f7f6;color:#555555;font-size:10pt;font-weight:bold;text-align:left;';
+        $s_nilai = 'background:#f4f7f6;font-size:16pt;font-weight:bold;text-align:left;mso-number-format:\@;';
+        $s_head  = 'background:#24b47e;color:#ffffff;font-weight:bold;border:1px solid #bbbbbb;padding:6px;text-align:left;';
+        $s_sel   = 'border:1px solid #bbbbbb;padding:6px;text-align:left;mso-number-format:\@;';
+        ?>
+        <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">
+        <head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"></head>
+        <body>
+            <table style="border-collapse:collapse;font-family:Calibri,Arial,sans-serif;">
+                <tr><td colspan="6" style="<?= $s_judul ?>">Laporan Stok Produk - Toko Gilang</td></tr>
+                <tr><td colspan="6" style="<?= $s_muted ?>">Dicetak: <?= date('d-m-Y H:i') ?></td></tr>
+                <tr><td colspan="6"></td></tr>
+                <tr>
+                    <td colspan="3" bgcolor="#f4f7f6" style="<?= $s_label ?>">Total Nilai Aset</td>
+                    <td colspan="3" bgcolor="#f4f7f6" style="<?= $s_label ?>">Total Sisa Stok</td>
+                </tr>
+                <tr>
+                    <td colspan="3" bgcolor="#f4f7f6" style="<?= $s_nilai ?>">Rp <?= number_format($total_aset, 0, ',', '.') ?></td>
+                    <td colspan="3" bgcolor="#f4f7f6" style="<?= $s_nilai ?>"><?= $total_stok ?> Unit (<?= $total_jenis ?> Produk)</td>
+                </tr>
+                <tr><td colspan="6"></td></tr>
+                <tr>
+                    <?php foreach (['No', 'Nama Produk', 'Harga', 'Stok', 'Nilai Aset', 'Dibuat Oleh'] as $h): ?>
+                    <th bgcolor="#24b47e" style="<?= $s_head ?>"><font color="#FFFFFF"><?= $h ?></font></th>
+                    <?php endforeach; ?>
+                </tr>
+                <?php foreach (array_values($produk_list) as $i => $p): $nilai = (int)$p['harga'] * (int)$p['stok']; ?>
+                <tr>
+                    <td style="<?= $s_sel ?>"><?= $i + 1 ?></td>
+                    <td style="<?= $s_sel ?>"><?= htmlspecialchars($p['nama_produk']) ?></td>
+                    <td style="<?= $s_sel ?>">Rp <?= number_format((int)$p['harga'], 0, ',', '.') ?></td>
+                    <td style="<?= $s_sel ?>"><?= (int)$p['stok'] ?></td>
+                    <td style="<?= $s_sel ?>">Rp <?= number_format($nilai, 0, ',', '.') ?></td>
+                    <td style="<?= $s_sel ?>"><?= htmlspecialchars($p['dibuat_oleh'] ?? '-') ?></td>
+                </tr>
+                <?php endforeach; ?>
+            </table>
+        </body>
+        </html>
+        <?php
+        exit;
+    }
+
+    // 4. Download .CSV
+    if ($export === 'csv') {
+        $filename = "Laporan-Produk-" . date('Y-m-d_H-i') . ".csv";
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        $output = fopen('php://output', 'w');
+        fprintf($output, chr(0xEF).chr(0xBB).chr(0xBF));
+        fputcsv($output, ['No', 'Nama Produk', 'Harga', 'Stok', 'Nilai Aset', 'Dibuat Oleh'], ';');
+        foreach (array_values($produk_list) as $i => $p) {
+            $nilai = (int)$p['harga'] * (int)$p['stok'];
+            fputcsv($output, [$i + 1, $p['nama_produk'], $p['harga'], $p['stok'], $nilai, $p['dibuat_oleh'] ?? '-'], ';');
+        }
+        fclose($output);
+        exit;
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -86,7 +229,14 @@ $produk_list = $pdo->query("SELECT * FROM produk ORDER BY id DESC")->fetchAll();
         nav { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
         nav a { margin-right: 15px; text-decoration: none; font-weight: bold; color: #24b47e; }
         .user-badge { background: #e6f7f0; color: #1c8c61; padding: 5px 10px; border-radius: 5px; font-size: 13px; font-weight: bold; }
-        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        .header-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin: 20px 0 10px; }
+        .export-group { display: flex; flex-wrap: wrap; gap: 8px; }
+        .btn-exp { color: white; padding: 8px 12px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 13px; display: inline-flex; align-items: center; gap: 5px; }
+        .btn-xlsx { background: #107c41; } .btn-xlsx:hover { background: #0b5a2f; }
+        .btn-xls { background: #24b47e; } .btn-xls:hover { background: #1c8c61; }
+        .btn-csv { background: #4b5563; } .btn-csv:hover { background: #374151; }
+        .btn-pdf { background: #dc2626; } .btn-pdf:hover { background: #b91c1c; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
         th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
         th { background: #24b47e; color: white; }
         form input, button { padding: 8px; margin-right: 5px; }
@@ -142,7 +292,16 @@ $produk_list = $pdo->query("SELECT * FROM produk ORDER BY id DESC")->fetchAll();
         <?php endif; ?>
     </form>
 
-     <h3>Daftar Stok Produk</h3>
+    <div class="header-bar">
+        <h3 style="margin:0;">Daftar Stok Produk</h3>
+        <div class="export-group">
+            <a href="produk.php?export=xlsx" class="btn-exp btn-xlsx">📊 Excel (.xlsx)</a>
+            <a href="produk.php?export=xls" class="btn-exp btn-xls">📗 Excel (.xls)</a>
+            <a href="produk.php?export=csv" class="btn-exp btn-csv">📄 CSV (.csv)</a>
+            <a href="produk.php?export=pdf" class="btn-exp btn-pdf">📕 PDF (.pdf)</a>
+        </div>
+    </div>
+
     <table>
         <thead>
             <tr>
