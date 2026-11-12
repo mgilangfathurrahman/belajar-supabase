@@ -9,6 +9,29 @@
  *  XLSX
  * ========================================================= */
 
+/** Peta nama gaya -> indeks cellXfs di styles.xml */
+const XLSX_STYLES = [
+    'normal'  => 0,   // teks biasa
+    'bold'    => 1,   // teks tebal
+    'num'     => 2,   // angka ribuan
+    'title'   => 3,   // judul besar
+    'head'    => 4,   // header tabel (hijau, teks putih)
+    'cell'    => 5,   // sel tabel bergaris
+    'int'     => 6,   // angka bulat bergaris, rata kiri
+    'rp'      => 7,   // format "Rp "#,##0 bergaris, rata kiri
+    'label'   => 8,   // label kartu ringkasan (abu-abu)
+    'bigrp'   => 9,   // nilai besar format Rp
+    'bigtext' => 10,  // nilai besar teks
+    'section' => 11,  // judul seksi
+    'muted'   => 12,  // teks kecil abu-abu
+];
+
+/** Sel dengan gaya: xcell('Teks', 'head') */
+function xcell($value, string $style = 'normal'): array
+{
+    return ['v' => $value, 's' => $style];
+}
+
 /** Nomor kolom (0 = A) -> huruf kolom (A, B, ... Z, AA, ...) */
 function xlsx_col(int $i): string
 {
@@ -23,13 +46,23 @@ function xlsx_col(int $i): string
 }
 
 /**
- * @param array  $rows      array of array; int = angka, selain itu = teks
- * @param array  $boldRows  indeks baris (mulai 0) yang dicetak tebal
- * @param string $sheetName nama sheet
+ * @param array  $rows       array of array. Sel boleh scalar (int = angka, selain itu = teks)
+ *                           atau xcell(nilai, 'gaya')
+ * @param array  $boldRows   indeks baris (mulai 0) yang dicetak tebal (hanya untuk sel scalar)
+ * @param string $sheetName  nama sheet
+ * @param array  $colWidths  lebar tiap kolom, mis. [8, 22, 30]; kosong = semua 22
+ * @param array  $merges     daftar rentang gabung sel, mis. ['A1:F1', 'A4:C4']
+ * @param bool   $showGrid   false = sembunyikan garis grid Excel
  * @return string isi file .xlsx (biner)
  */
-function buildXlsx(array $rows, array $boldRows = [0], string $sheetName = 'Laporan'): string
-{
+function buildXlsx(
+    array $rows,
+    array $boldRows = [0],
+    string $sheetName = 'Laporan',
+    array $colWidths = [],
+    array $merges = [],
+    bool $showGrid = true
+): string {
     $NS_MAIN = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
     $NS_REL  = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
     $NS_PKG  = 'http://schemas.openxmlformats.org/package/2006/relationships';
@@ -43,39 +76,101 @@ function buildXlsx(array $rows, array $boldRows = [0], string $sheetName = 'Lapo
 
     // ---- sheet1.xml ----
     $sheet = $XML . '<worksheet xmlns="' . $NS_MAIN . '">';
-    $sheet .= '<cols><col min="1" max="' . max(1, $colCount) . '" width="22" customWidth="1"/></cols>';
-    $sheet .= '<sheetData>';
+    $sheet .= '<sheetViews><sheetView workbookViewId="0"' . ($showGrid ? '' : ' showGridLines="0"') . '/></sheetViews>';
+    $sheet .= '<cols>';
+    if ($colWidths) {
+        foreach (array_values($colWidths) as $i => $w) {
+            $n = $i + 1;
+            $sheet .= '<col min="' . $n . '" max="' . $n . '" width="' . $w . '" customWidth="1"/>';
+        }
+    } else {
+        $sheet .= '<col min="1" max="' . max(1, $colCount) . '" width="22" customWidth="1"/>';
+    }
+    $sheet .= '</cols><sheetData>';
+
     foreach ($rows as $ri => $row) {
         $rNum = $ri + 1;
         $isBold = in_array($ri, $boldRows, true);
         $sheet .= '<row r="' . $rNum . '">';
-        foreach (array_values($row) as $ci => $val) {
+        foreach (array_values($row) as $ci => $cell) {
             $ref = xlsx_col($ci) . $rNum;
-            if (is_int($val) || is_float($val)) {
-                $style = $isBold ? 1 : 2; // 2 = format ribuan
-                $sheet .= '<c r="' . $ref . '" s="' . $style . '"><v>' . $val . '</v></c>';
+
+            if (is_array($cell)) {
+                $val = $cell['v'] ?? '';
+                $style = XLSX_STYLES[$cell['s'] ?? 'normal'] ?? 0;
             } else {
-                $style = $isBold ? 1 : 0;
+                $val = $cell;
+                $style = null;
+            }
+
+            if (is_int($val) || is_float($val)) {
+                if ($style === null) {
+                    $style = $isBold ? 1 : 2;
+                }
+                $sheet .= '<c r="' . $ref . '" s="' . $style . '"><v>' . $val . '</v></c>';
+            } elseif ($val === '' || $val === null) {
+                $sheet .= '<c r="' . $ref . '" s="' . ($style ?? 0) . '"/>';
+            } else {
+                if ($style === null) {
+                    $style = $isBold ? 1 : 0;
+                }
                 $txt = htmlspecialchars((string)$val, ENT_XML1 | ENT_QUOTES, 'UTF-8');
-                // buang karakter kontrol yang tidak valid di XML
                 $txt = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F]/', '', $txt);
                 $sheet .= '<c r="' . $ref . '" s="' . $style . '" t="inlineStr"><is><t xml:space="preserve">' . $txt . '</t></is></c>';
             }
         }
         $sheet .= '</row>';
     }
-    $sheet .= '</sheetData></worksheet>';
+    $sheet .= '</sheetData>';
+    if ($merges) {
+        $sheet .= '<mergeCells count="' . count($merges) . '">';
+        foreach ($merges as $m) {
+            $sheet .= '<mergeCell ref="' . $m . '"/>';
+        }
+        $sheet .= '</mergeCells>';
+    }
+    $sheet .= '</worksheet>';
 
-    // ---- styles.xml (0 = normal, 1 = tebal, 2 = angka ribuan) ----
+    // ---- styles.xml ----
+    $bd = '<left style="thin"><color rgb="FFBBBBBB"/></left><right style="thin"><color rgb="FFBBBBBB"/></right>'
+        . '<top style="thin"><color rgb="FFBBBBBB"/></top><bottom style="thin"><color rgb="FFBBBBBB"/></bottom><diagonal/>';
+
     $styles = $XML . '<styleSheet xmlns="' . $NS_MAIN . '">'
-        . '<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts>'
-        . '<fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>'
-        . '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>'
+        . '<numFmts count="1"><numFmt numFmtId="164" formatCode="&quot;Rp &quot;#,##0"/></numFmts>'
+        . '<fonts count="7">'
+        .   '<font><sz val="11"/><name val="Calibri"/></font>'
+        .   '<font><b/><sz val="11"/><name val="Calibri"/></font>'
+        .   '<font><b/><sz val="16"/><name val="Calibri"/></font>'
+        .   '<font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font>'
+        .   '<font><sz val="10"/><color rgb="FF555555"/><name val="Calibri"/></font>'
+        .   '<font><b/><sz val="14"/><name val="Calibri"/></font>'
+        .   '<font><b/><sz val="12"/><name val="Calibri"/></font>'
+        . '</fonts>'
+        . '<fills count="4">'
+        .   '<fill><patternFill patternType="none"/></fill>'
+        .   '<fill><patternFill patternType="gray125"/></fill>'
+        .   '<fill><patternFill patternType="solid"><fgColor rgb="FF24B47E"/><bgColor indexed="64"/></patternFill></fill>'
+        .   '<fill><patternFill patternType="solid"><fgColor rgb="FFF4F7F6"/><bgColor indexed="64"/></patternFill></fill>'
+        . '</fills>'
+        . '<borders count="2">'
+        .   '<border><left/><right/><top/><bottom/><diagonal/></border>'
+        .   '<border>' . $bd . '</border>'
+        . '</borders>'
         . '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
-        . '<cellXfs count="3">'
-        . '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
-        . '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>'
-        . '<xf numFmtId="3" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>'
+        . '<cellXfs count="13">'
+        .   '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'                                                   // 0 normal
+        .   '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>'                                     // 1 bold
+        .   '<xf numFmtId="3" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>'                             // 2 num
+        .   '<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/>'                                     // 3 title
+        .   '<xf numFmtId="0" fontId="3" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>' // 4 head
+        .   '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf>'           // 5 cell
+        .   '<xf numFmtId="1" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="top"/></xf>'  // 6 int
+        .   '<xf numFmtId="164" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="top"/></xf>' // 7 rp
+        .   '<xf numFmtId="0" fontId="4" fillId="3" borderId="0" xfId="0" applyFont="1" applyFill="1"/>'                       // 8 label
+        .   '<xf numFmtId="164" fontId="5" fillId="3" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="left"/></xf>' // 9 bigrp
+        .   '<xf numFmtId="0" fontId="5" fillId="3" borderId="0" xfId="0" applyFont="1" applyFill="1"/>'                       // 10 bigtext
+        .   '<xf numFmtId="0" fontId="6" fillId="0" borderId="0" xfId="0" applyFont="1"/>'                                     // 11 section
+        .   '<xf numFmtId="0" fontId="4" fillId="0" borderId="0" xfId="0" applyFont="1"/>'                                     // 12 muted
         . '</cellXfs></styleSheet>';
 
     $safeName = htmlspecialchars(substr($sheetName, 0, 31), ENT_XML1 | ENT_QUOTES, 'UTF-8');
@@ -168,9 +263,19 @@ function pdf_esc(string $s): string
  * @param array      $rows      array of array (isi sel)
  * @param array      $widths    lebar tiap kolom (pt); total sebaiknya 782
  * @param array|null $totalRow  baris total (opsional, dicetak tebal)
+ * @param array      $summary   kartu ringkasan di atas tabel: [[label, nilai], ...] (maks 3)
+ * @param string     $sectionTitle judul di atas tabel, mis. "5 Transaksi Terbaru"
  * @return string isi file .pdf
  */
-function buildPdf(string $title, array $headers, array $rows, array $widths, ?array $totalRow = null): string
+function buildPdf(
+    string $title,
+    array $headers,
+    array $rows,
+    array $widths,
+    ?array $totalRow = null,
+    array $summary = [],
+    string $sectionTitle = ''
+): string
 {
     $pw = 842; $ph = 595; $m = 30; $fs = 8; $lh = 10; $pad = 4;
     $pages = [];
@@ -214,7 +319,7 @@ function buildPdf(string $title, array $headers, array $rows, array $widths, ?ar
         $y -= $h;
     };
 
-    $startPage = function () use (&$ops, &$y, &$pages, $ph, $m, $headers, $prepare, $draw, $title) {
+    $startPage = function () use (&$ops, &$y, &$pages, $ph, $m, $headers, $prepare, $draw, $title, $summary, $sectionTitle) {
         if ($ops !== '') {
             $pages[] = $ops;
         }
@@ -225,6 +330,24 @@ function buildPdf(string $title, array $headers, array $rows, array $widths, ?ar
             $ops .= "BT 0 g /F2 14 Tf $m " . round($y - 12, 2) . ' Td (' . pdf_esc(pdf_latin1($title)) . ") Tj ET\n";
             $ops .= "BT 0.3 g /F1 8 Tf $m " . round($y - 26, 2) . ' Td (' . pdf_esc('Dicetak: ' . date('d-m-Y H:i')) . ") Tj ET\n";
             $y -= 36;
+
+            // kartu ringkasan (seperti dashboard)
+            if ($summary) {
+                $cw = 250; $ch = 50; $gap = 20; $cx = $m;
+                foreach (array_slice($summary, 0, 3) as $card) {
+                    $by = round($y - $ch, 2);
+                    $ops .= "0.957 0.969 0.965 rg $cx $by $cw $ch re f\n";
+                    $ops .= "0.14 0.71 0.49 rg $cx $by 4 $ch re f\n";
+                    $ops .= "BT 0.33 g /F2 9 Tf " . ($cx + 14) . ' ' . round($y - 17, 2) . ' Td (' . pdf_esc(pdf_latin1((string)$card[0])) . ") Tj ET\n";
+                    $ops .= "BT 0 g /F2 16 Tf " . ($cx + 14) . ' ' . round($y - 40, 2) . ' Td (' . pdf_esc(pdf_latin1((string)$card[1])) . ") Tj ET\n";
+                    $cx += $cw + $gap;
+                }
+                $y -= $ch + 22;
+            }
+            if ($sectionTitle !== '') {
+                $ops .= "BT 0 g /F2 12 Tf $m " . round($y - 10, 2) . ' Td (' . pdf_esc(pdf_latin1($sectionTitle)) . ") Tj ET\n";
+                $y -= 22;
+            }
         }
         [$w, $h] = $prepare($headers);
         $draw($w, $h, 'head');

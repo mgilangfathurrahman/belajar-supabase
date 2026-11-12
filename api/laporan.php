@@ -17,29 +17,57 @@ $semua_pesanan = $pdo->query($sql_semua)->fetchAll();
 
 $export = $_GET['export'] ?? '';
 
+// ===== Pengaturan export XLSX & XLS =====
+// Jumlah transaksi terbaru yang dimasukkan ke file. Isi null untuk semua transaksi.
+$BATAS_EXPORT = 5;
+
+$total_omzet_semua = 0;
+foreach ($semua_pesanan as $r) {
+    $total_omzet_semua += (int)$r['total_harga'];
+}
+$total_transaksi_semua = count($semua_pesanan);
+$data_export = $BATAS_EXPORT ? array_slice($semua_pesanan, 0, $BATAS_EXPORT) : $semua_pesanan;
+$judul_tabel = $BATAS_EXPORT ? $BATAS_EXPORT . ' Transaksi Terbaru' : 'Semua Transaksi';
+
 // 1. Download .XLSX (murni PHP, tanpa ZipArchive & tanpa CDN)
 if ($export === 'xlsx') {
-    $rows = [
-        ['ID', 'Nama Pembeli', 'No. Telepon', 'Email', 'Alamat Pengiriman', 'Nama Produk', 'Jumlah', 'Total Harga (Rp)', 'Waktu Transaksi']
+    $kosong = fn(string $gaya) => xcell('', $gaya);
+
+    $rows = [];
+    $rows[] = [xcell('Laporan Penjualan - Toko Gilang', 'title')];
+    $rows[] = [xcell('Dicetak: ' . date('d-m-Y H:i'), 'muted')];
+    $rows[] = [];
+    $rows[] = [
+        xcell('Total Pendapatan', 'label'), $kosong('label'), $kosong('label'),
+        xcell('Total Transaksi', 'label'), $kosong('label'), $kosong('label'),
     ];
-    $grand_total = 0;
-    foreach ($semua_pesanan as $r) {
-        $grand_total += (int)$r['total_harga'];
+    $rows[] = [
+        xcell($total_omzet_semua, 'bigrp'), $kosong('bigrp'), $kosong('bigrp'),
+        xcell($total_transaksi_semua . ' Pesanan', 'bigtext'), $kosong('bigtext'), $kosong('bigtext'),
+    ];
+    $rows[] = [];
+    $rows[] = [xcell($judul_tabel, 'section')];
+    $rows[] = array_map(fn($h) => xcell($h, 'head'), ['ID', 'Pembeli', 'Produk', 'Jumlah', 'Total', 'Waktu']);
+
+    foreach ($data_export as $r) {
         $rows[] = [
-            (string)$r['id'],
-            (string)$r['nama_pembeli'],
-            (string)($r['no_telp'] ?: '-'),
-            (string)($r['email'] ?: '-'),
-            (string)($r['alamat'] ?: '-'),
-            (string)$r['nama_produk'],
-            (int)$r['jumlah'],
-            (int)$r['total_harga'],
-            (string)$r['tanggal']
+            xcell((int)$r['id'], 'int'),
+            xcell((string)$r['nama_pembeli'], 'cell'),
+            xcell((string)$r['nama_produk'], 'cell'),
+            xcell((int)$r['jumlah'], 'int'),
+            xcell((int)$r['total_harga'], 'rp'),
+            xcell(substr((string)$r['tanggal'], 0, 19), 'cell'),
         ];
     }
-    $rows[] = ['', '', '', '', '', '', 'TOTAL PENDAPATAN', $grand_total, ''];
 
-    $xlsx = buildXlsx($rows, [0, count($rows) - 1], 'Laporan Penjualan');
+    $xlsx = buildXlsx(
+        $rows,
+        [],
+        'Laporan Penjualan',
+        [8, 22, 32, 10, 18, 22],
+        ['A1:F1', 'A2:F2', 'A4:C4', 'D4:F4', 'A5:C5', 'D5:F5', 'A7:F7'],
+        false
+    );
     send_download(
         $xlsx,
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -47,80 +75,84 @@ if ($export === 'xlsx') {
     );
 }
 
-// 2. Download .PDF (file PDF asli, bukan dialog cetak)
+// 2. Download .PDF (file PDF asli, tampilan sama dengan dashboard)
 if ($export === 'pdf') {
-    $headers = ['ID', 'Nama Pembeli', 'No. Telepon', 'Email', 'Alamat', 'Produk', 'Jml', 'Total Harga', 'Waktu'];
-    $widths  = [30, 100, 75, 120, 157, 105, 35, 75, 85]; // total 782 pt (A4 landscape)
+    $headers = ['ID', 'Pembeli', 'Produk', 'Jumlah', 'Total', 'Waktu'];
+    $widths  = [40, 150, 220, 60, 120, 192]; // total 782 pt (A4 landscape)
 
     $rows = [];
-    $grand_total = 0;
-    foreach ($semua_pesanan as $r) {
-        $grand_total += (int)$r['total_harga'];
+    foreach ($data_export as $r) {
         $rows[] = [
             (string)$r['id'],
             (string)$r['nama_pembeli'],
-            (string)($r['no_telp'] ?: '-'),
-            (string)($r['email'] ?: '-'),
-            (string)($r['alamat'] ?: '-'),
             (string)$r['nama_produk'],
             (string)$r['jumlah'],
             'Rp ' . number_format((int)$r['total_harga'], 0, ',', '.'),
-            (string)$r['tanggal']
+            substr((string)$r['tanggal'], 0, 19)
         ];
     }
-    $totalRow = ['', '', '', '', '', 'TOTAL PENDAPATAN', '', 'Rp ' . number_format($grand_total, 0, ',', '.'), ''];
+    $summary = [
+        ['Total Pendapatan', 'Rp ' . number_format($total_omzet_semua, 0, ',', '.')],
+        ['Total Transaksi', $total_transaksi_semua . ' Pesanan'],
+    ];
 
-    $pdf = buildPdf('Laporan Penjualan - Toko Gilang', $headers, $rows, $widths, $totalRow);
+    $pdf = buildPdf('Laporan Penjualan - Toko Gilang', $headers, $rows, $widths, null, $summary, $judul_tabel);
     send_download($pdf, 'application/pdf', 'Laporan-Penjualan-' . date('Y-m-d_H-i') . '.pdf');
 }
 
-// 3. Proses Download .XLS (HTML Table Berwarna)
+// 3. Proses Download .XLS (HTML Table Berwarna, tampilan sama dengan dashboard)
 if ($export === 'xls') {
     $filename = "Laporan-Penjualan-" . date('Y-m-d_H-i') . ".xls";
     header("Content-Type: application/vnd.ms-excel; charset=utf-8");
     header("Content-Disposition: attachment; filename=\"$filename\"");
-    $grand_total = 0;
     ?>
     <!DOCTYPE html>
     <html lang="id">
     <head>
         <meta charset="UTF-8">
         <style>
-            table { border-collapse: collapse; width: 100%; font-family: Arial, sans-serif; }
-            th { background-color: #24b47e; color: #ffffff; font-weight: bold; border: 1px solid #000000; padding: 10px; }
-            td { border: 1px solid #000000; padding: 8px; }
+            table { border-collapse: collapse; font-family: Arial, sans-serif; }
+            .judul { font-size: 18pt; font-weight: bold; }
+            .muted { font-size: 10pt; color: #555555; }
+            .label { background-color: #f4f7f6; color: #555555; font-size: 10pt; font-weight: bold; }
+            .nilai { background-color: #f4f7f6; font-size: 16pt; font-weight: bold; text-align: left; }
+            .seksi { font-size: 13pt; font-weight: bold; }
+            th { background-color: #24b47e; color: #ffffff; font-weight: bold; border: 1px solid #bbbbbb; padding: 8px; text-align: left; }
+            td.sel { border: 1px solid #bbbbbb; padding: 8px; text-align: left; vertical-align: top; }
             .str { mso-number-format:\@; }
         </style>
     </head>
     <body>
-        <h2>Laporan Penjualan - Toko Gilang</h2>
         <table>
-            <thead>
-                <tr>
-                    <th>ID</th><th>Nama Pembeli</th><th>No. Telepon</th><th>Email</th>
-                    <th>Alamat</th><th>Produk</th><th>Jumlah</th><th>Total Harga</th><th>Waktu</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php foreach ($semua_pesanan as $row): $grand_total += $row['total_harga']; ?>
-                <tr>
-                    <td><?= $row['id'] ?></td>
-                    <td><?= htmlspecialchars($row['nama_pembeli']) ?></td>
-                    <td class="str"><?= htmlspecialchars($row['no_telp'] ?: '-') ?></td>
-                    <td><?= htmlspecialchars($row['email'] ?: '-') ?></td>
-                    <td><?= htmlspecialchars($row['alamat'] ?: '-') ?></td>
-                    <td><?= htmlspecialchars($row['nama_produk']) ?></td>
-                    <td><?= $row['jumlah'] ?></td>
-                    <td>Rp <?= number_format($row['total_harga'], 0, ',', '.') ?></td>
-                    <td><?= $row['tanggal'] ?></td>
-                </tr>
-                <?php endforeach; ?>
-                <tr>
-                    <td colspan="7" style="text-align:right; font-weight:bold;">TOTAL PENDAPATAN</td>
-                    <td style="font-weight:bold;">Rp <?= number_format($grand_total, 0, ',', '.') ?></td>
-                    <td></td>
-                </tr>
-            </tbody>
+            <colgroup>
+                <col width="50"><col width="150"><col width="220"><col width="70"><col width="130"><col width="160">
+            </colgroup>
+            <tr><td colspan="6" class="judul">Laporan Penjualan - Toko Gilang</td></tr>
+            <tr><td colspan="6" class="muted">Dicetak: <?= date('d-m-Y H:i') ?></td></tr>
+            <tr><td colspan="6"></td></tr>
+            <tr>
+                <td colspan="3" class="label">Total Pendapatan</td>
+                <td colspan="3" class="label">Total Transaksi</td>
+            </tr>
+            <tr>
+                <td colspan="3" class="nilai">Rp <?= number_format($total_omzet_semua, 0, ',', '.') ?></td>
+                <td colspan="3" class="nilai"><?= $total_transaksi_semua ?> Pesanan</td>
+            </tr>
+            <tr><td colspan="6"></td></tr>
+            <tr><td colspan="6" class="seksi"><?= htmlspecialchars($judul_tabel) ?></td></tr>
+            <tr>
+                <th>ID</th><th>Pembeli</th><th>Produk</th><th>Jumlah</th><th>Total</th><th>Waktu</th>
+            </tr>
+            <?php foreach ($data_export as $row): ?>
+            <tr>
+                <td class="sel"><?= (int)$row['id'] ?></td>
+                <td class="sel"><?= htmlspecialchars($row['nama_pembeli']) ?></td>
+                <td class="sel"><?= htmlspecialchars($row['nama_produk']) ?></td>
+                <td class="sel"><?= (int)$row['jumlah'] ?></td>
+                <td class="sel">Rp <?= number_format((int)$row['total_harga'], 0, ',', '.') ?></td>
+                <td class="sel str"><?= htmlspecialchars(substr((string)$row['tanggal'], 0, 19)) ?></td>
+            </tr>
+            <?php endforeach; ?>
         </table>
     </body>
     </html>
