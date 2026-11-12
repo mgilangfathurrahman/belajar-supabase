@@ -14,11 +14,10 @@ $sql_semua = "SELECT pesanan.id, pesanan.nama_pembeli, pesanan.no_telp, pesanan.
               ORDER BY pesanan.id DESC";
 $semua_pesanan = $pdo->query($sql_semua)->fetchAll();
 
-// 1. Proses Download .XLSX Murni (PHP ZipArchive - Bebas Peringatan Excel & Tanpa CDN)
+// 1. Proses Download .XLSX Murni (Pure PHP ZIP Builder - Tanpa ZipArchive & Tanpa CDN)
 if (isset($_GET['export']) && $_GET['export'] === 'xlsx') {
     $filename = "Laporan-Penjualan-Toko-Gilang-" . date('Y-m-d_H-i') . ".xlsx";
     
-    // Susun baris data
     $rows = [
         ['ID', 'Nama Pembeli', 'No. Telepon', 'Email', 'Alamat Pengiriman', 'Nama Produk', 'Jumlah', 'Total Harga (Rp)', 'Waktu Transaksi']
     ];
@@ -39,7 +38,6 @@ if (isset($_GET['export']) && $_GET['export'] === 'xlsx') {
     }
     $rows[] = ['', '', '', '', '', '', 'TOTAL PENDAPATAN', $grand_total, ''];
 
-    // Buat XML Worksheet
     $sheetXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
               . '<worksheet xmlns="http://openxmlformats.org">'
               . '<sheetData>';
@@ -60,23 +58,49 @@ if (isset($_GET['export']) && $_GET['export'] === 'xlsx') {
     }
     $sheetXml .= '</sheetData></worksheet>';
 
-    $tmpFile = tempnam(sys_get_temp_dir(), 'xlsx');
-    $zip = new ZipArchive();
-    if ($zip->open($tmpFile, ZipArchive::OVERWRITE) === true) {
-        $zip->addFromString('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://openxmlformats.org"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>');
-        $zip->addFromString('_rels/.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://openxmlformats.org"><Relationship Id="rId1" Type="http://openxmlformats.org" Target="xl/workbook.xml"/></Relationships>');
-        $zip->addFromString('xl/workbook.xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://openxmlformats.org" xmlns:r="http://openxmlformats.org"><sheets><sheet name="Laporan Penjualan" sheetId="1" r:id="rId1"/></sheets></workbook>');
-        $zip->addFromString('xl/_rels/workbook.xml.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://openxmlformats.org"><Relationship Id="rId1" Type="http://openxmlformats.org/worksheet" Target="worksheets/sheet1.xml"/></Relationships>');
-        $zip->addFromString('xl/worksheets/sheet1.xml', $sheetXml);
-        $zip->close();
+    $files = [
+        '[Content_Types].xml' => '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://openxmlformats.org"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>',
+        '_rels/.rels' => '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://openxmlformats.org"><Relationship Id="rId1" Type="http://openxmlformats.org" Target="xl/workbook.xml"/></Relationships>',
+        'xl/workbook.xml' => '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://openxmlformats.org" xmlns:r="http://openxmlformats.org"><sheets><sheet name="Laporan Penjualan" sheetId="1" r:id="rId1"/></sheets></workbook>',
+        'xl/_rels/workbook.xml.rels' => '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://openxmlformats.org"><Relationship Id="rId1" Type="http://openxmlformats.org/worksheet" Target="worksheets/sheet1.xml"/></Relationships>',
+        'xl/worksheets/sheet1.xml' => $sheetXml
+    ];
 
-        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        header('Content-Disposition: attachment; filename="' . $filename . '"');
-        header('Content-Length: ' . filesize($tmpFile));
-        readfile($tmpFile);
-        unlink($tmpFile);
-        exit;
+    // Rakitan biner ZIP murni menggunakan gzdeflate & crc32
+    $zipData = '';
+    $centralDir = '';
+    $offset = 0;
+    $count = 0;
+
+    foreach ($files as $name => $content) {
+        $crc = crc32($content);
+        $uncompSize = strlen($content);
+        $compContent = gzdeflate($content);
+        $compSize = strlen($compContent);
+        $nameLen = strlen($name);
+
+        $localHeader = "\x50\x4b\x03\x04\x14\x00\x00\x00\x08\x00\x00\x00\x00\x00"
+                     . pack('VVVvv', $crc, $compSize, $uncompSize, $nameLen, 0)
+                     . $name;
+        $zipData .= $localHeader . $compContent;
+
+        $centralDir .= "\x50\x4b\x01\x02\x00\x00\x14\x00\x00\x00\x08\x00\x00\x00\x00\x00"
+                     . pack('VVVvvvvvVV', $crc, $compSize, $uncompSize, $nameLen, 0, 0, 0, 0, 0, $offset)
+                     . $name;
+        $offset = strlen($zipData);
+        $count++;
     }
+
+    $eocd = "\x50\x4b\x05\x06\x00\x00\x00\x00"
+          . pack('vvVVv', $count, $count, strlen($centralDir), strlen($zipData), 0);
+    $finalXlsx = $zipData . $centralDir . $eocd;
+
+    if (ob_get_length()) ob_end_clean();
+    header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
+    header('Content-Length: ' . strlen($finalXlsx));
+    echo $finalXlsx;
+    exit;
 }
 
 // 2. Proses Download .XLS (HTML Table Berwarna)
