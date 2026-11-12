@@ -30,6 +30,22 @@ if (isset($_GET['export']) && $_GET['export'] === 'xls') {
             th { background-color: #24b47e; color: #ffffff; font-weight: bold; border: 1px solid #000000; padding: 10px; }
             td { border: 1px solid #000000; padding: 8px; }
             .str { mso-number-format:\@; }
+                    /* Aturan otomatis menyembunyikan menu & tombol saat dicetak ke PDF */
+        @media print {
+            nav, .export-group, .badge, hr {
+                display: none !important;
+            }
+            body {
+                margin: 0;
+                padding: 0;
+            }
+            th {
+                background-color: #24b47e !important;
+                color: white !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+        }
         </style>
     </head>
     <body>
