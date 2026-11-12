@@ -240,6 +240,7 @@ if ($export !== '') {
         .btn-batal { background: #888; color: white; padding: 8px 12px; text-decoration: none; font-size: 13px; border-radius: 4px; }
         .btn-aksi { padding: 5px 10px; text-decoration: none; color: white; border-radius: 4px; font-size: 12px; margin-right: 4px; }
         .btn-edit { background: #f0ad4e; }
+        .btn-edit-aktif { background: #d9534f; }
         .btn-hapus { background: #d9534f; }
         .alert-ok { background: #e6f7f0; color: #24b47e; padding: 10px; margin: 15px 0; border-radius: 5px; }
         .alert-err { background: #ffe6e6; color: #d93025; padding: 10px; margin: 15px 0; border-radius: 5px; }
