@@ -11,10 +11,10 @@ $error = "";
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = trim($_POST['username']);
-    $password = $_POST['password_hash'];
+    $password = $_POST['password'];
 
     try {
-        $stmt = $pdo->prepare("SELECT * FROM admin_users WHERE username = :user");
+        $stmt = $pdo->prepare("SELECT * FROM admin WHERE username = :user");
         $stmt->execute([':user' => $username]);
         $admin = $stmt->fetch();
 
