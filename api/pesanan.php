@@ -8,7 +8,45 @@ require 'koneksi.php';
 
 $pesan = "";
 
-// Proses Catat Pesanan Baru oleh Admin
+// 1. Proses Batalkan / Hapus Pesanan & Kembalikan Stok
+if (isset($_GET['batal'])) {
+    $id_pesanan = (int) $_GET['batal'];
+    try {
+        $pdo->beginTransaction();
+
+        // Ambil detail produk dan jumlah dari pesanan yang akan dibatalkan
+        $stmt = $pdo->prepare("SELECT produk_id, jumlah FROM pesanan WHERE id = :id FOR UPDATE");
+        $stmt->execute([':id' => $id_pesanan]);
+        $data_pesanan = $stmt->fetch();
+
+        if ($data_pesanan) {
+            // Kembalikan stok ke tabel produk
+            $upd = $pdo->prepare("UPDATE produk SET stok = stok + :jml WHERE id = :pid");
+            $upd->execute([
+                ':jml' => $data_pesanan['jumlah'],
+                ':pid' => $data_pesanan['produk_id']
+            ]);
+
+            // Hapus data dari tabel pesanan
+            $del = $pdo->prepare("DELETE FROM pesanan WHERE id = :id");
+            $del->execute([':id' => $id_pesanan]);
+
+            $pdo->commit();
+            header("Location: pesanan.php?status=batal");
+            exit;
+        } else {
+            $pdo->rollBack();
+            $pesan = "Data pesanan tidak ditemukan.";
+        }
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        $pesan = "Gagal membatalkan pesanan: " . $e->getMessage();
+    }
+}
+
+// 2. Proses Catat Pesanan Baru oleh Admin
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $nama_pembeli = trim($_POST['nama_pembeli']);
     $no_telp      = trim($_POST['no_telp'] ?? '-');
@@ -53,7 +91,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Ambil produk yang tersedia & riwayat pesanan lengkap
+// 3. Ambil Daftar Produk & Riwayat Pesanan
 try {
     $produk_tersedia = $pdo->query("SELECT * FROM produk WHERE stok > 0 ORDER BY nama_produk ASC")->fetchAll();
     
@@ -77,14 +115,16 @@ try {
         body { font-family: sans-serif; margin: 20px 40px; }
         nav a { margin-right: 15px; text-decoration: none; font-weight: bold; color: #24b47e; }
         .table-wrapper { overflow-x: auto; margin-top: 20px; }
-        table { width: 100%; border-collapse: collapse; min-width: 850px; }
+        table { width: 100%; border-collapse: collapse; min-width: 900px; }
         th, td { border: 1px solid #ddd; padding: 10px; text-align: left; vertical-align: top; font-size: 14px; }
         th { background: #24b47e; color: white; }
         .form-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
         .form-grid input, .form-grid select, .form-grid button { padding: 8px; font-size: 14px; }
         button { background: #24b47e; color: white; border: none; cursor: pointer; font-weight: bold; border-radius: 4px; padding: 8px 15px; }
         button:hover { background: #1c8c61; }
-        .alert-ok { background: #e6f7f0; color: #24b47e; padding: 10px; margin: 15px 0; border-radius: 5px; }
+        .btn-batal { background: #d9534f; color: white; padding: 6px 10px; text-decoration: none; border-radius: 4px; font-size: 12px; font-weight: bold; display: inline-block; }
+        .btn-batal:hover { background: #c9302c; }
+        .alert-ok { background: #e6f7f0; color: #24b47e; padding: 10px; margin: 15px 0; border-radius: 5px; font-weight: bold; }
         .alert-err { background: #ffe6e6; color: #d93025; padding: 10px; margin: 15px 0; border-radius: 5px; }
         .kontak-info { font-size: 12px; color: #555; margin-top: 4px; }
     </style>
@@ -101,8 +141,13 @@ try {
 
     <h2>Catat Pesanan Manual (Admin)</h2>
 
-    <?php if (isset($_GET['status']) && $_GET['status'] === 'sukses'): ?>
-        <div class="alert-ok">Pesanan berhasil dicatat dan stok produk otomatis berkurang!</div>
+    <?php if (isset($_GET['status'])): ?>
+        <div class="alert-ok">
+            <?php
+                if ($_GET['status'] === 'sukses') echo "Pesanan berhasil dicatat dan stok produk otomatis berkurang!";
+                if ($_GET['status'] === 'batal') echo "Pesanan berhasil dibatalkan dan stok produk telah dikembalikan!";
+            ?>
+        </div>
     <?php endif; ?>
 
     <?php if (!empty($pesan)): ?>
@@ -141,7 +186,8 @@ try {
                     <th>Produk</th>
                     <th>Qty</th>
                     <th>Total Harga</th>
-                    <th>Waktu Transaksi</th>
+                    <th>Waktu</th>
+                    <th>Aksi</th>
                 </tr>
             </thead>
             <tbody>
@@ -161,10 +207,13 @@ try {
                         <td><?= $ps['jumlah'] ?></td>
                         <td><strong>Rp <?= number_format($ps['total_harga'], 0, ',', '.') ?></strong></td>
                         <td><?= $ps['tanggal'] ?></td>
+                        <td>
+                            <a href="pesanan.php?batal=<?= $ps['id'] ?>" class="btn-batal" onclick="return confirm('Batalkan pesanan ini? Stok produk akan otomatis dikembalikan.')">Batalkan</a>
+                        </td>
                     </tr>
                     <?php endforeach; ?>
                 <?php else: ?>
-                    <tr><td colspan="7" style="text-align:center;">Belum ada riwayat pesanan.</td></tr>
+                    <tr><td colspan="8" style="text-align:center;">Belum ada riwayat pesanan.</td></tr>
                 <?php endif; ?>
             </tbody>
         </table>
