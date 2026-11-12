@@ -272,7 +272,7 @@ if ($export !== '') {
     <table>
         <thead>
             <tr>
-                <th>ID</th>
+                <th>No</th>
                 <th>Nama Produk</th>
                 <th>Harga</th>
                 <th>Stok</th>
@@ -282,9 +282,10 @@ if ($export !== '') {
         </thead>
         <tbody>
             <?php if (count($produk_list) > 0): ?>
+                <?php $no = 1; ?>
                 <?php foreach ($produk_list as $p): ?>
                 <tr>
-                    <td><?= $p['id'] ?></td>
+                    <td><?= $no++ ?></td>
                     <td><?= htmlspecialchars($p['nama_produk']) ?></td>
                     <td>Rp <?= number_format($p['harga'], 0, ',', '.') ?></td>
                     <td><?= $p['stok'] ?></td>
