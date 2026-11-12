@@ -11,14 +11,14 @@ $error = "";
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = trim($_POST['username']);
-    $password = $_POST['password'];
+    $password = $_POST['password_hash'];
 
     try {
         $stmt = $pdo->prepare("SELECT * FROM admin_users WHERE username = :user");
         $stmt->execute([':user' => $username]);
         $admin = $stmt->fetch();
 
-        if ($admin && password_verify($password, $admin['password'])) {
+        if ($admin && password_verify($password, $admin['password_hash'])) {
             // Simpan status login di Cookie Browser selama 1 hari (86400 detik)
             setcookie('admin_logged_in', 'true', time() + 86400, "/");
             setcookie('admin_username', $admin['username'], time() + 86400, "/");
