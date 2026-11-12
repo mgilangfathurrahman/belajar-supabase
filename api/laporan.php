@@ -169,15 +169,17 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
     </table>
 
     <script>
-        // Data lengkap dari PHP untuk ekspor XLSX & PDF
-        const dataLaporan = <?= json_encode($semua_pesanan) ?>;
+        const dataLaporan = <?= json_encode($semua_pesanan, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
 
         function formatRupiah(angka) {
             return 'Rp ' + Number(angka).toLocaleString('id-ID');
         }
 
-        // Fungsi 3: Download .XLSX Murni (Bebas Peringatan Excel)
         function downloadXLSX() {
+            if (typeof XLSX === 'undefined') {
+                alert('Library Excel sedang dimuat, silakan coba klik beberapa detik lagi atau gunakan tombol Excel (.xls).');
+                return;
+            }
             let totalSemua = 0;
             const rows = dataLaporan.map(item => {
                 totalSemua += Number(item.total_harga);
@@ -208,8 +210,11 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
             XLSX.writeFile(workbook, "Laporan-Penjualan-Toko-Gilang.xlsx");
         }
 
-        // Fungsi 4: Download .PDF Rapi
         function downloadPDF() {
+            if (!window.jspdf) {
+                alert('Library PDF sedang dimuat, silakan periksa koneksi internet dan coba lagi.');
+                return;
+            }
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('landscape');
 
@@ -239,14 +244,13 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
                 startY: 28,
                 head: [['ID', 'Pembeli', 'No. Telp', 'Alamat', 'Produk', 'Qty', 'Total Harga', 'Waktu']],
                 body: tableBody,
-                headStyles: { fillColor: [36, 180, 126] },
+                headStyles: { fillColor: '#24b47e' },
                 styles: { fontSize: 9 }
             });
 
             doc.save("Laporan-Penjualan-Toko-Gilang.pdf");
         }
 
-        // Pembaruan Real-Time Halaman Web
         async function muatDataRealTime() {
             try {
                 const respon = await fetch('api-laporan.php');
