@@ -3,52 +3,65 @@ if (!isset($_COOKIE['admin_logged_in']) || $_COOKIE['admin_logged_in'] !== 'true
     header("Location: login.php");
     exit;
 }
- 
+
 require 'koneksi.php';
 require_once __DIR__ . '/export_helpers.php';
- 
-// Ambil seluruh data transaksi
-$sql_semua = "SELECT pesanan.id, pesanan.nama_pembeli, pesanan.no_telp, pesanan.email, pesanan.alamat, 
-                     produk.nama_produk, pesanan.jumlah, pesanan.total_harga, pesanan.tanggal 
-              FROM pesanan 
-              JOIN produk ON pesanan.produk_id = produk.id 
-              ORDER BY pesanan.id DESC";
-$semua_pesanan = $pdo->query($sql_semua)->fetchAll();
- 
-$export = $_GET['export'] ?? '';
- 
-// ===== Pengaturan export XLSX & XLS =====
-// Jumlah transaksi terbaru yang dimasukkan ke file. Isi null untuk semua transaksi.
-$BATAS_EXPORT = 5;
- 
+
+$admin_nama = $_COOKIE['admin_nama'] ?? ($_COOKIE['admin_username'] ?? 'Admin');
+$admin_role = $_COOKIE['admin_role'] ?? 'admin';
+$is_super   = ($admin_role === 'superadmin');
+
+// 1. Ambil Seluruh Data Transaksi Sesuai Hak Akses (Tanpa Batas 5)
+if ($is_super) {
+    $sql_semua = "SELECT pesanan.id, pesanan.nama_pembeli, pesanan.no_telp, pesanan.email, pesanan.alamat, 
+                         produk.nama_produk, pesanan.jumlah, pesanan.total_harga, pesanan.tanggal, pesanan.dibuat_oleh 
+                  FROM pesanan 
+                  JOIN produk ON pesanan.produk_id = produk.id 
+                  ORDER BY pesanan.id DESC";
+    $semua_pesanan = $pdo->query($sql_semua)->fetchAll();
+} else {
+    $sql_semua = "SELECT pesanan.id, pesanan.nama_pembeli, pesanan.no_telp, pesanan.email, pesanan.alamat, 
+                         produk.nama_produk, pesanan.jumlah, pesanan.total_harga, pesanan.tanggal, pesanan.dibuat_oleh 
+                  FROM pesanan 
+                  JOIN produk ON pesanan.produk_id = produk.id 
+                  WHERE pesanan.dibuat_oleh = :oleh 
+                  ORDER BY pesanan.id DESC";
+    $stmt_semua = $pdo->prepare($sql_semua);
+    $stmt_semua->execute([':oleh' => $admin_nama]);
+    $semua_pesanan = $stmt_semua->fetchAll();
+}
+
 $total_omzet_semua = 0;
 foreach ($semua_pesanan as $r) {
     $total_omzet_semua += (int)$r['total_harga'];
 }
 $total_transaksi_semua = count($semua_pesanan);
-$data_export = $BATAS_EXPORT ? array_slice($semua_pesanan, 0, $BATAS_EXPORT) : $semua_pesanan;
-$judul_tabel = $BATAS_EXPORT ? $BATAS_EXPORT . ' Transaksi Terbaru' : 'Semua Transaksi';
- 
-// 1. Download .XLSX (murni PHP, tanpa ZipArchive & tanpa CDN)
+$data_export = $semua_pesanan;
+$judul_lap   = $is_super ? 'Laporan Penjualan (Semua Admin) - Toko Gilang' : 'Laporan Penjualan (' . $admin_nama . ') - Toko Gilang';
+$judul_tabel = $is_super ? 'Semua Transaksi Penjualan' : 'Semua Transaksi Inputan ' . $admin_nama;
+
+$export = $_GET['export'] ?? '';
+
+// 2. Download .XLSX
 if ($export === 'xlsx') {
     $kosong = fn(string $gaya) => xcell('', $gaya);
- 
+
     $rows = [];
-    $rows[] = [xcell('Laporan Penjualan - Toko Gilang', 'title')];
+    $rows[] = [xcell($judul_lap, 'title')];
     $rows[] = [xcell('Dicetak: ' . date('d-m-Y H:i'), 'muted')];
     $rows[] = [];
     $rows[] = [
         xcell('Total Pendapatan', 'label'), $kosong('label'), $kosong('label'),
-        xcell('Total Transaksi', 'label'), $kosong('label'), $kosong('label'),
+        xcell('Total Transaksi', 'label'), $kosong('label'), $kosong('label'), $kosong('label'),
     ];
     $rows[] = [
         xcell($total_omzet_semua, 'bigrp'), $kosong('bigrp'), $kosong('bigrp'),
-        xcell($total_transaksi_semua . ' Pesanan', 'bigtext'), $kosong('bigtext'), $kosong('bigtext'),
+        xcell($total_transaksi_semua . ' Pesanan', 'bigtext'), $kosong('bigtext'), $kosong('bigtext'), $kosong('bigtext'),
     ];
     $rows[] = [];
     $rows[] = [xcell($judul_tabel, 'section')];
-    $rows[] = array_map(fn($h) => xcell($h, 'head'), ['No', 'Pembeli', 'Produk', 'Jumlah', 'Total', 'Waktu']);
- 
+    $rows[] = array_map(fn($h) => xcell($h, 'head'), ['No', 'Pembeli', 'Produk', 'Jumlah', 'Total', 'Diinput Oleh', 'Waktu']);
+
     foreach (array_values($data_export) as $i => $r) {
         $rows[] = [
             xcell($i + 1, 'int'),
@@ -56,30 +69,31 @@ if ($export === 'xlsx') {
             xcell((string)$r['nama_produk'], 'cell'),
             xcell((int)$r['jumlah'], 'int'),
             xcell((int)$r['total_harga'], 'rp'),
+            xcell((string)($r['dibuat_oleh'] ?? '-'), 'cell'),
             xcell(substr((string)$r['tanggal'], 0, 19), 'cell'),
         ];
     }
- 
+
     $xlsx = buildXlsx(
         $rows,
         [],
         'Laporan Penjualan',
-        [8, 22, 32, 10, 18, 22],
-        ['A1:F1', 'A2:F2', 'A4:C4', 'D4:F4', 'A5:C5', 'D5:F5', 'A7:F7'],
+,
+        ['A1:G1', 'A2:G2', 'A4:C4', 'D4:G4', 'A5:C5', 'D5:G5', 'A7:G7'],
         false
     );
     send_download(
         $xlsx,
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'Laporan-Penjualan-Toko-Gilang-' . date('Y-m-d_H-i') . '.xlsx'
+        'Laporan-Penjualan-' . date('Y-m-d_H-i') . '.xlsx'
     );
 }
- 
-// 2. Download .PDF (file PDF asli, tampilan sama dengan dashboard)
+
+// 3. Download .PDF
 if ($export === 'pdf') {
-    $headers = ['No', 'Pembeli', 'Produk', 'Jumlah', 'Total', 'Waktu'];
-    $widths  = [40, 150, 220, 60, 120, 192]; // total 782 pt (A4 landscape)
- 
+    $headers = ['No', 'Pembeli', 'Produk', 'Jumlah', 'Total', 'Diinput Oleh', 'Waktu'];
+    $widths  =; // Total 782 pt
+
     $rows = [];
     foreach (array_values($data_export) as $i => $r) {
         $rows[] = [
@@ -88,6 +102,7 @@ if ($export === 'pdf') {
             (string)$r['nama_produk'],
             (string)$r['jumlah'],
             'Rp ' . number_format((int)$r['total_harga'], 0, ',', '.'),
+            (string)($r['dibuat_oleh'] ?? '-'),
             substr((string)$r['tanggal'], 0, 19)
         ];
     }
@@ -95,55 +110,44 @@ if ($export === 'pdf') {
         ['Total Pendapatan', 'Rp ' . number_format($total_omzet_semua, 0, ',', '.')],
         ['Total Transaksi', $total_transaksi_semua . ' Pesanan'],
     ];
- 
-    $pdf = buildPdf('Laporan Penjualan - Toko Gilang', $headers, $rows, $widths, null, $summary, $judul_tabel);
+
+    $pdf = buildPdf($judul_lap, $headers, $rows, $widths, null, $summary, $judul_tabel);
     send_download($pdf, 'application/pdf', 'Laporan-Penjualan-' . date('Y-m-d_H-i') . '.pdf');
 }
- 
-// 3. Proses Download .XLS (HTML Table Berwarna, tampilan sama dengan dashboard)
-// Catatan: Excel membaca HTML dengan terbatas, jadi semua gaya ditulis inline
-// (bukan lewat class/CSS) supaya warna, garis, dan format sel pasti terbaca.
+
+// 4. Download .XLS
 if ($export === 'xls') {
     $filename = "Laporan-Penjualan-" . date('Y-m-d_H-i') . ".xls";
     header("Content-Type: application/vnd.ms-excel; charset=utf-8");
     header("Content-Disposition: attachment; filename=\"$filename\"");
- 
+
     $s_judul = 'font-size:18pt;font-weight:bold;';
     $s_muted = 'font-size:10pt;color:#555555;';
     $s_label = 'background:#f4f7f6;color:#555555;font-size:10pt;font-weight:bold;text-align:left;';
     $s_nilai = 'background:#f4f7f6;font-size:16pt;font-weight:bold;text-align:left;mso-number-format:\@;';
     $s_seksi = 'font-size:13pt;font-weight:bold;';
-    $s_head  = 'background:#24b47e;color:#ffffff;font-weight:bold;border:1px solid #bbbbbb;padding:6px;text-align:left;vertical-align:middle;white-space:nowrap;';
-    $s_sel   = 'border:1px solid #bbbbbb;padding:6px;text-align:left;vertical-align:top;white-space:nowrap;mso-number-format:\@;';
+    $s_head  = 'background:#24b47e;color:#ffffff;font-weight:bold;border:1px solid #bbbbbb;padding:6px;text-align:left;';
+    $s_sel   = 'border:1px solid #bbbbbb;padding:6px;text-align:left;vertical-align:top;mso-number-format:\@;';
     ?>
     <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">
-    <head>
-        <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-        <!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet>
-            <x:Name>Laporan Penjualan</x:Name>
-            <x:WorksheetOptions><x:DisplayGridlines>false</x:DisplayGridlines></x:WorksheetOptions>
-        </x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
-    </head>
+    <head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"></head>
     <body>
         <table style="border-collapse:collapse;font-family:Calibri,Arial,sans-serif;">
-            <colgroup>
-                <col width="60"><col width="170"><col width="250"><col width="90"><col width="140"><col width="170">
-            </colgroup>
-            <tr><td colspan="6" style="<?= $s_judul ?>">Laporan Penjualan - Toko Gilang</td></tr>
-            <tr><td colspan="6" style="<?= $s_muted ?>">Dicetak: <?= date('d-m-Y H:i') ?></td></tr>
-            <tr><td colspan="6"></td></tr>
+            <tr><td colspan="7" style="<?= $s_judul ?>"><?= htmlspecialchars($judul_lap) ?></td></tr>
+            <tr><td colspan="7" style="<?= $s_muted ?>">Dicetak: <?= date('d-m-Y H:i') ?></td></tr>
+            <tr><td colspan="7"></td></tr>
             <tr>
                 <td colspan="3" bgcolor="#f4f7f6" style="<?= $s_label ?>">Total Pendapatan</td>
-                <td colspan="3" bgcolor="#f4f7f6" style="<?= $s_label ?>">Total Transaksi</td>
+                <td colspan="4" bgcolor="#f4f7f6" style="<?= $s_label ?>">Total Transaksi</td>
             </tr>
             <tr>
                 <td colspan="3" bgcolor="#f4f7f6" style="<?= $s_nilai ?>">Rp <?= number_format($total_omzet_semua, 0, ',', '.') ?></td>
-                <td colspan="3" bgcolor="#f4f7f6" style="<?= $s_nilai ?>"><?= $total_transaksi_semua ?> Pesanan</td>
+                <td colspan="4" bgcolor="#f4f7f6" style="<?= $s_nilai ?>"><?= $total_transaksi_semua ?> Pesanan</td>
             </tr>
-            <tr><td colspan="6"></td></tr>
-            <tr><td colspan="6" style="<?= $s_seksi ?>"><?= htmlspecialchars($judul_tabel) ?></td></tr>
+            <tr><td colspan="7"></td></tr>
+            <tr><td colspan="7" style="<?= $s_seksi ?>"><?= htmlspecialchars($judul_tabel) ?></td></tr>
             <tr>
-                <?php foreach (['No', 'Pembeli', 'Produk', 'Jumlah', 'Total', 'Waktu'] as $h): ?>
+                <?php foreach (['No', 'Pembeli', 'Produk', 'Jumlah', 'Total', 'Diinput Oleh', 'Waktu'] as $h): ?>
                 <th bgcolor="#24b47e" style="<?= $s_head ?>"><font color="#FFFFFF"><?= $h ?></font></th>
                 <?php endforeach; ?>
             </tr>
@@ -154,6 +158,7 @@ if ($export === 'xls') {
                 <td style="<?= $s_sel ?>"><?= htmlspecialchars($row['nama_produk']) ?></td>
                 <td style="<?= $s_sel ?>"><?= (int)$row['jumlah'] ?></td>
                 <td style="<?= $s_sel ?>">Rp <?= number_format((int)$row['total_harga'], 0, ',', '.') ?></td>
+                <td style="<?= $s_sel ?>"><?= htmlspecialchars($row['dibuat_oleh'] ?? '-') ?></td>
                 <td style="<?= $s_sel ?>"><?= htmlspecialchars(substr((string)$row['tanggal'], 0, 19)) ?></td>
             </tr>
             <?php endforeach; ?>
@@ -163,19 +168,20 @@ if ($export === 'xls') {
     <?php
     exit;
 }
- 
-// 4. Proses Download .CSV
+
+// 5. Download .CSV
 if ($export === 'csv') {
     $filename = "Laporan-Penjualan-" . date('Y-m-d_H-i') . ".csv";
     header('Content-Type: text/csv; charset=utf-8');
     header('Content-Disposition: attachment; filename="' . $filename . '"');
     $output = fopen('php://output', 'w');
     fprintf($output, chr(0xEF).chr(0xBB).chr(0xBF));
-    fputcsv($output, ['No', 'Nama Pembeli', 'No. Telepon', 'Email', 'Alamat', 'Produk', 'Jumlah', 'Total Harga', 'Waktu'], ';');
-    foreach (array_values($semua_pesanan) as $i => $row) {
+    fputcsv($output, ['No', 'Nama Pembeli', 'No. Telepon', 'Email', 'Alamat', 'Produk', 'Jumlah', 'Total Harga', 'Diinput Oleh', 'Waktu'], ';');
+    foreach (array_values($data_export) as $i => $row) {
         fputcsv($output, [
             $i + 1, $row['nama_pembeli'], $row['no_telp'] ?: '-', $row['email'] ?: '-',
-            $row['alamat'] ?: '-', $row['nama_produk'], $row['jumlah'], $row['total_harga'], $row['tanggal']
+            $row['alamat'] ?: '-', $row['nama_produk'], $row['jumlah'], $row['total_harga'],
+            $row['dibuat_oleh'] ?? '-', $row['tanggal']
         ], ';');
     }
     fclose($output);
@@ -187,39 +193,60 @@ if ($export === 'csv') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Laporan Penjualan Real-Time - Toko Gilang</title>
+    <title>Laporan Penjualan Real-Time</title>
     <style>
         body { font-family: sans-serif; margin: 20px 40px; }
+        nav { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
         nav a { margin-right: 15px; text-decoration: none; font-weight: bold; color: #24b47e; }
-		.header-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin: 20px 0 10px; }
+        .user-badge { background: #e6f7f0; color: #1c8c61; padding: 5px 10px; border-radius: 5px; font-size: 13px; font-weight: bold; }
+        .header-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin: 25px 0 10px; }
         .export-group { display: flex; flex-wrap: wrap; gap: 8px; }
         .btn-exp { color: white; padding: 8px 12px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 13px; display: inline-flex; align-items: center; gap: 5px; }
         .btn-xlsx { background: #107c41; } .btn-xlsx:hover { background: #0b5a2f; }
         .btn-xls { background: #24b47e; } .btn-xls:hover { background: #1c8c61; }
         .btn-csv { background: #4b5563; } .btn-csv:hover { background: #374151; }
         .btn-pdf { background: #dc2626; } .btn-pdf:hover { background: #b91c1c; }
-        .cards { display: flex; flex-wrap: wrap; gap: 20px; margin: 20px 0; }
-        .card { background: #f4f7f6; padding: 20px; border-left: 5px solid #24b47e; width: 250px; border-radius: 4px; }
-        .card h3 { margin: 0; font-size: 14px; color: #555; }
-        .card p { margin: 10px 0 0; font-size: 24px; font-weight: bold; color: #222; }
+        .cards { display: flex; gap: 20px; margin-bottom: 20px; flex-wrap: wrap; }
+        .card { background: #f4f7f6; padding: 20px; border-radius: 8px; flex: 1; min-width: 220px; border-left: 5px solid #24b47e; }
+        .card h3 { margin: 0 0 10px 0; color: #555; font-size: 14px; }
+        .card p { margin: 0; font-size: 28px; font-weight: bold; color: #222; }
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
         th, td { border: 1px solid #ddd; padding: 10px; text-align: left; font-size: 14px; }
         th { background: #24b47e; color: white; }
-        .badge { background: #e6f7f0; color: #24b47e; padding: 4px 8px; font-size: 12px; border-radius: 4px; vertical-align: middle; }
+        .badge { background: #e6f7f0; color: #24b47e; padding: 4px 8px; border-radius: 4px; font-size: 12px; }
     </style>
 </head>
 <body>
     <nav>
-        <a href="laporan.php">Laporan Real-Time</a>
-        <a href="produk.php">Produk</a>
-        <a href="pesanan.php">Pesanan</a>
-        <a href="index.php" target="_blank">Lihat Katalog</a>
-        <a href="logout.php" style="color:red;">Logout</a>
+        <div>
+            <a href="laporan.php">Laporan Real-Time</a>
+            <a href="produk.php">Produk</a>
+            <a href="pesanan.php">Pesanan</a>
+            <?php if ($is_super): ?>
+                <a href="kelola-admin.php">Kelola Admin</a>
+            <?php endif; ?>
+            <a href="index.php" target="_blank">Lihat Katalog</a>
+            <a href="logout.php" style="color:red;">Logout</a>
+        </div>
+        <div class="user-badge">👤 <?= htmlspecialchars($admin_nama) ?> (<?= strtoupper(htmlspecialchars($admin_role)) ?>)</div>
     </nav>
     <hr>
- 
+
+    <h2 style="margin: 20px 0 15px;">Dashboard Penjualan <span class="badge">● Live Real-Time</span></h2>
+
+    <div class="cards">
+        <div class="card">
+            <h3><?= $is_super ? 'Total Pendapatan Keseluruhan' : 'Total Pendapatan (' . htmlspecialchars($admin_nama) . ')' ?></h3>
+            <p id="omzet">Rp <?= number_format($total_omzet_semua, 0, ',', '.') ?></p>
+        </div>
+        <div class="card">
+            <h3><?= $is_super ? 'Total Transaksi Keseluruhan' : 'Total Transaksi (' . htmlspecialchars($admin_nama) . ')' ?></h3>
+            <p id="transaksi"><?= $total_transaksi_semua ?> Pesanan</p>
+        </div>
+    </div>
+
     <div class="header-bar">
-        <h2 style="margin:0;">Dashboard Penjualan <span class="badge">● Live Real-Time</span></h2>
+        <h3 style="margin:0;"><?= htmlspecialchars($judul_tabel) ?></h3>
         <div class="export-group">
             <a href="laporan.php?export=xlsx" class="btn-exp btn-xlsx">📊 Excel (.xlsx)</a>
             <a href="laporan.php?export=xls" class="btn-exp btn-xls">📗 Excel (.xls)</a>
@@ -227,19 +254,7 @@ if ($export === 'csv') {
             <a href="laporan.php?export=pdf" class="btn-exp btn-pdf">📕 PDF (.pdf)</a>
         </div>
     </div>
-    
-    <div class="cards">
-        <div class="card">
-            <h3>Total Pendapatan</h3>
-            <p id="omzet">Memuat...</p>
-        </div>
-        <div class="card">
-            <h3>Total Transaksi</h3>
-            <p id="transaksi">Memuat...</p>
-        </div>
-    </div>
- 
-    <h3>5 Transaksi Terbaru</h3>
+
     <table>
         <thead>
             <tr>
@@ -248,56 +263,61 @@ if ($export === 'csv') {
                 <th>Produk</th>
                 <th>Jumlah</th>
                 <th>Total</th>
+                <th>Diinput Oleh</th>
                 <th>Waktu</th>
             </tr>
         </thead>
-        <tbody id="tabel-body">
-            <tr><td colspan="6">Menarik data dari PostgreSQL...</td></tr>
+        <tbody id="tabel-transaksi">
+            <?php if (count($semua_pesanan) > 0): ?>
+                <?php foreach (array_values($semua_pesanan) as $i => $row): ?>
+                <tr>
+                    <td><?= $i + 1 ?></td>
+                    <td><?= htmlspecialchars($row['nama_pembeli']) ?></td>
+                    <td><?= htmlspecialchars($row['nama_produk']) ?></td>
+                    <td><?= (int)$row['jumlah'] ?></td>
+                    <td><strong>Rp <?= number_format((int)$row['total_harga'], 0, ',', '.') ?></strong></td>
+                    <td><strong><?= htmlspecialchars($row['dibuat_oleh'] ?? '-') ?></strong></td>
+                    <td><?= htmlspecialchars(substr((string)$row['tanggal'], 0, 19)) ?></td>
+                </tr>
+                <?php endforeach; ?>
+            <?php else: ?>
+                <tr><td colspan="7" style="text-align:center;">Belum ada transaksi.</td></tr>
+            <?php endif; ?>
         </tbody>
     </table>
- 
+
     <script>
-        function formatRupiah(angka) {
-            return 'Rp ' + Number(angka).toLocaleString('id-ID');
-        }
- 
-        async function muatDataRealTime() {
-            try {
-                const respon = await fetch('api-laporan.php');
-                const data = await respon.json();
- 
-                if (data.status === 'sukses') {
-                    document.getElementById('omzet').innerText = formatRupiah(data.ringkasan.total_omzet);
-                    document.getElementById('transaksi').innerText = data.ringkasan.total_transaksi + ' Pesanan';
- 
-                    const tbody = document.getElementById('tabel-body');
-                    tbody.innerHTML = '';
- 
-                    if (data.transaksi.length === 0) {
-                        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Belum ada transaksi.</td></tr>';
-                        return;
+        function updateLaporan() {
+            fetch('api-laporan.php')
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('omzet').innerText = 'Rp ' + Number(data.total_omzet).toLocaleString('id-ID');
+                    document.getElementById('transaksi').innerText = data.total_transaksi + ' Pesanan';
+
+                    let html = '';
+                    if (data.terbaru.length === 0) {
+                        html = '<tr><td colspan="7" style="text-align:center;">Belum ada transaksi.</td></tr>';
+                    } else {
+                        data.terbaru.forEach((row, index) => {
+                            let oleh = row.dibuat_oleh ? row.dibuat_oleh : '-';
+                            let waktu = row.tanggal ? row.tanggal.substring(0, 19) : '-';
+                            html += `<tr>
+                                <td>${index + 1}</td>
+                                <td>${row.nama_pembeli}</td>
+                                <td>${row.nama_produk}</td>
+                                <td>${row.jumlah}</td>
+                                <td><strong>Rp ${Number(row.total_harga).toLocaleString('id-ID')}</strong></td>
+                                <td><strong>${oleh}</strong></td>
+                                <td>${waktu}</td>
+                            </tr>`;
+                        });
                     }
- 
-                    data.transaksi.forEach((item, i) => {
-                        tbody.innerHTML += `
-                            <tr>
-                                <td>${i + 1}</td>
-                                <td>${item.nama_pembeli}</td>
-                                <td>${item.nama_produk}</td>
-                                <td>${item.jumlah}</td>
-                                <td>${formatRupiah(item.total_harga)}</td>
-                                <td>${item.tanggal}</td>
-                            </tr>
-                        `;
-                    });
-                }
-            } catch (err) {
-                console.error('Gagal memuat data real-time:', err);
-            }
+                    document.getElementById('tabel-transaksi').innerHTML = html;
+                })
+                .catch(err => console.error('Gagal mengambil data:', err));
         }
- 
-        muatDataRealTime();
-        setInterval(muatDataRealTime, 3000);
+
+        setInterval(updateLaporan, 3000);
     </script>
 </body>
 </html>
