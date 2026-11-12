@@ -47,11 +47,11 @@ if ($export === 'xlsx') {
     ];
     $rows[] = [];
     $rows[] = [xcell($judul_tabel, 'section')];
-    $rows[] = array_map(fn($h) => xcell($h, 'head'), ['ID', 'Pembeli', 'Produk', 'Jumlah', 'Total', 'Waktu']);
+    $rows[] = array_map(fn($h) => xcell($h, 'head'), ['No', 'Pembeli', 'Produk', 'Jumlah', 'Total', 'Waktu']);
  
-    foreach ($data_export as $r) {
+    foreach (array_values($data_export) as $i => $r) {
         $rows[] = [
-            xcell((int)$r['id'], 'int'),
+            xcell($i + 1, 'int'),
             xcell((string)$r['nama_pembeli'], 'cell'),
             xcell((string)$r['nama_produk'], 'cell'),
             xcell((int)$r['jumlah'], 'int'),
@@ -77,13 +77,13 @@ if ($export === 'xlsx') {
  
 // 2. Download .PDF (file PDF asli, tampilan sama dengan dashboard)
 if ($export === 'pdf') {
-    $headers = ['ID', 'Pembeli', 'Produk', 'Jumlah', 'Total', 'Waktu'];
+    $headers = ['No', 'Pembeli', 'Produk', 'Jumlah', 'Total', 'Waktu'];
     $widths  = [40, 150, 220, 60, 120, 192]; // total 782 pt (A4 landscape)
  
     $rows = [];
-    foreach ($data_export as $r) {
+    foreach (array_values($data_export) as $i => $r) {
         $rows[] = [
-            (string)$r['id'],
+            (string)($i + 1),
             (string)$r['nama_pembeli'],
             (string)$r['nama_produk'],
             (string)$r['jumlah'],
@@ -143,13 +143,13 @@ if ($export === 'xls') {
             <tr><td colspan="6"></td></tr>
             <tr><td colspan="6" style="<?= $s_seksi ?>"><?= htmlspecialchars($judul_tabel) ?></td></tr>
             <tr>
-                <?php foreach (['ID', 'Pembeli', 'Produk', 'Jumlah', 'Total', 'Waktu'] as $h): ?>
+                <?php foreach (['No', 'Pembeli', 'Produk', 'Jumlah', 'Total', 'Waktu'] as $h): ?>
                 <th bgcolor="#24b47e" style="<?= $s_head ?>"><font color="#FFFFFF"><?= $h ?></font></th>
                 <?php endforeach; ?>
             </tr>
-            <?php foreach ($data_export as $row): ?>
+            <?php foreach (array_values($data_export) as $i => $row): ?>
             <tr>
-                <td style="<?= $s_sel ?>"><?= (int)$row['id'] ?></td>
+                <td style="<?= $s_sel ?>"><?= $i + 1 ?></td>
                 <td style="<?= $s_sel ?>"><?= htmlspecialchars($row['nama_pembeli']) ?></td>
                 <td style="<?= $s_sel ?>"><?= htmlspecialchars($row['nama_produk']) ?></td>
                 <td style="<?= $s_sel ?>"><?= (int)$row['jumlah'] ?></td>
@@ -171,10 +171,10 @@ if ($export === 'csv') {
     header('Content-Disposition: attachment; filename="' . $filename . '"');
     $output = fopen('php://output', 'w');
     fprintf($output, chr(0xEF).chr(0xBB).chr(0xBF));
-    fputcsv($output, ['ID', 'Nama Pembeli', 'No. Telepon', 'Email', 'Alamat', 'Produk', 'Jumlah', 'Total Harga', 'Waktu'], ';');
-    foreach ($semua_pesanan as $row) {
+    fputcsv($output, ['No', 'Nama Pembeli', 'No. Telepon', 'Email', 'Alamat', 'Produk', 'Jumlah', 'Total Harga', 'Waktu'], ';');
+    foreach (array_values($semua_pesanan) as $i => $row) {
         fputcsv($output, [
-            $row['id'], $row['nama_pembeli'], $row['no_telp'] ?: '-', $row['email'] ?: '-',
+            $i + 1, $row['nama_pembeli'], $row['no_telp'] ?: '-', $row['email'] ?: '-',
             $row['alamat'] ?: '-', $row['nama_produk'], $row['jumlah'], $row['total_harga'], $row['tanggal']
         ], ';');
     }
@@ -247,7 +247,7 @@ if ($export === 'csv') {
     <table>
         <thead>
             <tr>
-                <th>ID</th>
+                <th>No</th>
                 <th>Pembeli</th>
                 <th>Produk</th>
                 <th>Jumlah</th>
@@ -282,10 +282,10 @@ if ($export === 'csv') {
                         return;
                     }
  
-                    data.transaksi.forEach(item => {
+                    data.transaksi.forEach((item, i) => {
                         tbody.innerHTML += `
                             <tr>
-                                <td>${item.id}</td>
+                                <td>${i + 1}</td>
                                 <td>${item.nama_pembeli}</td>
                                 <td>${item.nama_produk}</td>
                                 <td>${item.jumlah}</td>
