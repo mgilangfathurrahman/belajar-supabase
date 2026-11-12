@@ -38,8 +38,8 @@ if (isset($_GET['edit'])) {
         $stmt = $pdo->prepare("SELECT * FROM produk WHERE id = :id");
         $stmt->execute([':id' => $id_edit]);
     } else {
-        $stmt = $pdo->prepare("SELECT * FROM produk WHERE id = :id AND dibuat_oleh = :oleh");
-        $stmt->execute([':id' => $id_edit, ':oleh' => $admin_nama]);
+        $stmt = $pdo->prepare("SELECT * FROM produk WHERE id = :id AND TRIM(dibuat_oleh) = :oleh");
+        $stmt->execute([':id' => $id_edit, ':oleh' => trim($admin_nama)]);
     }
     $edit_data = $stmt->fetch();
 
@@ -66,13 +66,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ':id'    => $id_edit
                 ]);
             } else {
-                $stmt = $pdo->prepare("UPDATE produk SET nama_produk = :nama, harga = :harga, stok = :stok WHERE id = :id AND dibuat_oleh = :oleh");
+                $stmt = $pdo->prepare("UPDATE produk SET nama_produk = :nama, harga = :harga, stok = :stok WHERE id = :id AND TRIM(dibuat_oleh) = :oleh");
                 $stmt->execute([
                     ':nama'  => $nama_produk,
                     ':harga' => $harga,
                     ':stok'  => $stok,
                     ':id'    => $id_edit,
-                    ':oleh'  => $admin_nama
+                    ':oleh'  => trim($admin_nama)
                 ]);
             }
             header("Location: produk.php?status=diubah");
@@ -83,7 +83,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ':nama'  => $nama_produk,
                 ':harga' => $harga,
                 ':stok'  => $stok,
-                ':oleh'  => $admin_nama
+                ':oleh'  => trim($admin_nama)
             ]);
             header("Location: produk.php?status=sukses");
             exit;
