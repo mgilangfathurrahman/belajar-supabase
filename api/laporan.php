@@ -4,43 +4,81 @@ if (!isset($_COOKIE['admin_logged_in']) || $_COOKIE['admin_logged_in'] !== 'true
     exit;
 }
 
-// Proses Download Laporan CSV / Excel jika parameter ?export=csv dipanggil
-if (isset($_GET['export']) && $_GET['export'] === 'csv') {
+// Proses Download Laporan Excel (.xls) dengan tampilan tabel rapi
+if (isset($_GET['export']) && $_GET['export'] === 'excel') {
     require 'koneksi.php';
 
-    $filename = "laporan-penjualan-" . date('Y-m-d_H-i') . ".csv";
-    header('Content-Type: text/csv; charset=utf-8');
-    header('Content-Disposition: attachment; filename="' . $filename . '"');
-
-    $output = fopen('php://output', 'w');
-    // Tambahkan BOM UTF-8 agar karakter dan kolom terbaca rapi di Microsoft Excel
-    fprintf($output, chr(0xEF).chr(0xBB).chr(0xBF));
-
-    // Header Kolom Excel
-    fputcsv($output, ['ID Pesanan', 'Nama Pembeli', 'No. Telepon', 'Email', 'Alamat Pengiriman', 'Nama Produk', 'Jumlah', 'Total Harga (Rp)', 'Waktu Transaksi']);
+    $filename = "Laporan-Penjualan-Toko-Gilang-" . date('Y-m-d_H-i') . ".xls";
+    header("Content-Type: application/vnd.ms-excel; charset=utf-8");
+    header("Content-Disposition: attachment; filename=\"$filename\"");
+    header("Pragma: no-cache");
+    header("Expires: 0");
 
     $sql = "SELECT pesanan.id, pesanan.nama_pembeli, pesanan.no_telp, pesanan.email, pesanan.alamat, 
                    produk.nama_produk, pesanan.jumlah, pesanan.total_harga, pesanan.tanggal 
             FROM pesanan 
             JOIN produk ON pesanan.produk_id = produk.id 
             ORDER BY pesanan.id DESC";
-    $stmt = $pdo->query($sql);
-
-    while ($row = $stmt->fetch()) {
-        fputcsv($output, [
-            $row['id'],
-            $row['nama_pembeli'],
-            $row['no_telp'] ?: '-',
-            $row['email'] ?: '-',
-            $row['alamat'] ?: '-',
-            $row['nama_produk'],
-            $row['jumlah'],
-            $row['total_harga'],
-            $row['tanggal']
-        ]);
-    }
-
-    fclose($output);
+    $data_pesanan = $pdo->query($sql)->fetchAll();
+    $grand_total = 0;
+    ?>
+    <!DOCTYPE html>
+    <html lang="id">
+    <head>
+        <meta charset="UTF-8">
+        <style>
+            table { border-collapse: collapse; width: 100%; font-family: Arial, sans-serif; }
+            th { background-color: #24b47e; color: #ffffff; font-weight: bold; border: 1px solid #000000; padding: 10px; text-align: center; }
+            td { border: 1px solid #000000; padding: 8px; vertical-align: top; }
+            .text-center { text-align: center; }
+            .text-right { text-align: right; }
+            .total-row { background-color: #e6f7f0; font-weight: bold; }
+            /* Mencegah nomor telepon berubah menjadi format ilmiah (8.12E+10) di Excel */
+            .str { mso-number-format:\@; }
+        </style>
+    </head>
+    <body>
+        <h2>Laporan Penjualan - Toko Gilang</h2>
+        <p>Dicetak pada: <?= date('d-m-Y H:i') ?> WIB</p>
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Nama Pembeli</th>
+                    <th>No. Telepon</th>
+                    <th>Email</th>
+                    <th>Alamat Pengiriman</th>
+                    <th>Nama Produk</th>
+                    <th>Jumlah</th>
+                    <th>Total Harga</th>
+                    <th>Waktu Transaksi</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($data_pesanan as $row): ?>
+                    <?php $grand_total += $row['total_harga']; ?>
+                    <tr>
+                        <td class="text-center"><?= $row['id'] ?></td>
+                        <td><?= htmlspecialchars($row['nama_pembeli']) ?></td>
+                        <td class="str"><?= htmlspecialchars($row['no_telp'] ?: '-') ?></td>
+                        <td><?= htmlspecialchars($row['email'] ?: '-') ?></td>
+                        <td><?= htmlspecialchars($row['alamat'] ?: '-') ?></td>
+                        <td><?= htmlspecialchars($row['nama_produk']) ?></td>
+                        <td class="text-center"><?= $row['jumlah'] ?></td>
+                        <td class="text-right">Rp <?= number_format($row['total_harga'], 0, ',', '.') ?></td>
+                        <td class="text-center"><?= $row['tanggal'] ?></td>
+                    </tr>
+                <?php endforeach; ?>
+                <tr class="total-row">
+                    <td colspan="7" class="text-right">TOTAL KESELURUHAN PENDAPATAN</td>
+                    <td class="text-right">Rp <?= number_format($grand_total, 0, ',', '.') ?></td>
+                    <td></td>
+                </tr>
+            </tbody>
+        </table>
+    </body>
+    </html>
+    <?php
     exit;
 }
 ?>
@@ -78,7 +116,7 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
 
     <div class="header-bar">
         <h2 style="margin:0;">Dashboard Penjualan <span class="badge">● Live Real-Time</span></h2>
-        <a href="laporan.php?export=csv" class="btn-download">📥 Download Laporan (Excel / CSV)</a>
+        <a href="laporan.php?export=excel" class="btn-download">📥 Download Laporan Excel (.xls)</a>
     </div>
     
     <div class="cards">
