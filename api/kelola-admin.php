@@ -193,10 +193,10 @@ $daftar_admin = $pdo->query("SELECT id, username, nama, role, aktif, dibuat FROM
         </form>
     </div>
 
-    <table>
+   <table>
         <thead>
             <tr>
-                <th>ID</th>
+                <th>No</th>
                 <th>Nama Tampilan</th>
                 <th>Username</th>
                 <th>Hak Akses</th>
@@ -205,9 +205,10 @@ $daftar_admin = $pdo->query("SELECT id, username, nama, role, aktif, dibuat FROM
             </tr>
         </thead>
         <tbody>
+            <?php $no = 1; ?>
             <?php foreach ($daftar_admin as $adm): ?>
             <tr>
-                <td><?= $adm['id'] ?></td>
+                <td><?= $no++ ?></td>
                 <td><strong><?= htmlspecialchars($adm['nama']) ?></strong></td>
                 <td><?= htmlspecialchars($adm['username']) ?></td>
                 <td>
