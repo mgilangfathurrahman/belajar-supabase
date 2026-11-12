@@ -5,6 +5,7 @@ if (!isset($_COOKIE['admin_logged_in']) || $_COOKIE['admin_logged_in'] !== 'true
 }
 
 require 'koneksi.php';
+require_once __DIR__ . '/export_helpers.php';
 
 $pesan = "";
 
@@ -14,20 +15,17 @@ if (isset($_GET['batal'])) {
     try {
         $pdo->beginTransaction();
 
-        // Ambil detail produk dan jumlah dari pesanan yang akan dibatalkan
         $stmt = $pdo->prepare("SELECT produk_id, jumlah FROM pesanan WHERE id = :id FOR UPDATE");
         $stmt->execute([':id' => $id_pesanan]);
         $data_pesanan = $stmt->fetch();
 
         if ($data_pesanan) {
-            // Kembalikan stok ke tabel produk
             $upd = $pdo->prepare("UPDATE produk SET stok = stok + :jml WHERE id = :pid");
             $upd->execute([
                 ':jml' => $data_pesanan['jumlah'],
                 ':pid' => $data_pesanan['produk_id']
             ]);
 
-            // Hapus data dari tabel pesanan
             $del = $pdo->prepare("DELETE FROM pesanan WHERE id = :id");
             $del->execute([':id' => $id_pesanan]);
 
@@ -91,7 +89,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// 3. Ambil Daftar Produk & Riwayat Pesanan
+// 3. Ambil Daftar Produk & Riwayat Pesanan Lengkap
 try {
     $produk_tersedia = $pdo->query("SELECT * FROM produk WHERE stok > 0 ORDER BY nama_produk ASC")->fetchAll();
     
@@ -104,9 +102,126 @@ try {
 } catch (PDOException $e) {
     die("Error Query Database: " . $e->getMessage());
 }
+
+// 4. Handler Download 4 Format (XLSX, PDF, XLS, CSV)
+$export = $_GET['export'] ?? '';
+if ($export !== '') {
+    $grand_total = 0;
+    foreach ($pesanan_list as $ps) {
+        $grand_total += (int)$ps['total_harga'];
+    }
+
+    if ($export === 'xlsx') {
+        $rows = [];
+        $rows[] = [xcell('Data Lengkap Pesanan - Toko Gilang', 'title')];
+        $rows[] = [xcell('Dicetak: ' . date('d-m-Y H:i'), 'muted')];
+        $rows[] = [];
+        $rows[] = array_map(fn($h) => xcell($h, 'head'), ['ID', 'Nama Pembeli', 'No. Telepon', 'Email', 'Alamat Pengiriman', 'Produk', 'Qty', 'Total Harga', 'Waktu']);
+
+        foreach ($pesanan_list as $r) {
+            $rows[] = [
+                xcell((int)$r['id'], 'int'),
+                xcell((string)$r['nama_pembeli'], 'cell'),
+                xcell((string)($r['no_telp'] ?: '-'), 'cell'),
+                xcell((string)($r['email'] ?: '-'), 'cell'),
+                xcell((string)($r['alamat'] ?: '-'), 'cell'),
+                xcell((string)$r['nama_produk'], 'cell'),
+                xcell((int)$r['jumlah'], 'int'),
+                xcell((int)$r['total_harga'], 'rp'),
+                xcell(substr((string)$r['tanggal'], 0, 19), 'cell'),
+            ];
+        }
+        $rows[] = [
+            xcell('', 'cell'), xcell('', 'cell'), xcell('', 'cell'), xcell('', 'cell'),
+            xcell('', 'cell'), xcell('', 'cell'), xcell('TOTAL', 'head'),
+            xcell($grand_total, 'rp'), xcell('', 'cell')
+        ];
+
+        $xlsx = buildXlsx(
+            $rows,
+            [],
+            'Data Pesanan',
+,
+            ['A1:I1', 'A2:I2'],
+            false
+        );
+        send_download($xlsx, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'Data-Pesanan-' . date('Y-m-d_H-i') . '.xlsx');
+    }
+
+    if ($export === 'pdf') {
+        $headers = ['ID', 'Pembeli', 'No. Telp', 'Alamat', 'Produk', 'Qty', 'Total Harga', 'Waktu'];
+        $widths  =; // Total 782 pt
+        $rows = [];
+        foreach ($pesanan_list as $r) {
+            $rows[] = [
+                (string)$r['id'],
+                (string)$r['nama_pembeli'],
+                (string)($r['no_telp'] ?: '-'),
+                (string)($r['alamat'] ?: '-'),
+                (string)$r['nama_produk'],
+                (string)$r['jumlah'],
+                'Rp ' . number_format((int)$r['total_harga'], 0, ',', '.'),
+                substr((string)$r['tanggal'], 0, 19)
+            ];
+        }
+        $totalRow = ['', '', '', '', '', 'TOTAL', 'Rp ' . number_format($grand_total, 0, ',', '.'), ''];
+        $pdf = buildPdf('Data Lengkap Pesanan - Toko Gilang', $headers, $rows, $widths, $totalRow);
+        send_download($pdf, 'application/pdf', 'Data-Pesanan-' . date('Y-m-d_H-i') . '.pdf');
+    }
+
+    if ($export === 'xls') {
+        $filename = 'Data-Pesanan-' . date('Y-m-d_H-i') . '.xls';
+        header("Content-Type: application/vnd.ms-excel; charset=utf-8");
+        header("Content-Disposition: attachment; filename=\"$filename\"");
+        $s_head = 'background:#24b47e;color:#ffffff;font-weight:bold;border:1px solid #bbbbbb;padding:6px;text-align:left;';
+        $s_sel  = 'border:1px solid #bbbbbb;padding:6px;text-align:left;vertical-align:top;mso-number-format:\@;';
+        echo '<html><head><meta charset="utf-8"></head><body>';
+        echo '<h2>Data Lengkap Pesanan - Toko Gilang</h2><p>Dicetak: ' . date('d-m-Y H:i') . '</p>';
+        echo '<table style="border-collapse:collapse;font-family:Calibri,Arial,sans-serif;"><tr>';
+        foreach (['ID', 'Nama Pembeli', 'No. Telepon', 'Email', 'Alamat Pengiriman', 'Produk', 'Qty', 'Total Harga', 'Waktu'] as $h) {
+            echo '<th bgcolor="#24b47e" style="' . $s_head . '">' . $h . '</th>';
+        }
+        echo '</tr>';
+        foreach ($pesanan_list as $r) {
+            echo '<tr>';
+            echo '<td style="' . $s_sel . '">' . (int)$r['id'] . '</td>';
+            echo '<td style="' . $s_sel . '">' . htmlspecialchars($r['nama_pembeli']) . '</td>';
+            echo '<td style="' . $s_sel . '">' . htmlspecialchars($r['no_telp'] ?: '-') . '</td>';
+            echo '<td style="' . $s_sel . '">' . htmlspecialchars($r['email'] ?: '-') . '</td>';
+            echo '<td style="' . $s_sel . '">' . htmlspecialchars($r['alamat'] ?: '-') . '</td>';
+            echo '<td style="' . $s_sel . '">' . htmlspecialchars($r['nama_produk']) . '</td>';
+            echo '<td style="' . $s_sel . '">' . (int)$r['jumlah'] . '</td>';
+            echo '<td style="' . $s_sel . '">Rp ' . number_format((int)$r['total_harga'], 0, ',', '.') . '</td>';
+            echo '<td style="' . $s_sel . '">' . htmlspecialchars(substr((string)$r['tanggal'], 0, 19)) . '</td>';
+            echo '</tr>';
+        }
+        echo '<tr><td colspan="7" style="' . $s_sel . 'font-weight:bold;text-align:right;">TOTAL PENDAPATAN</td>';
+        echo '<td style="' . $s_sel . 'font-weight:bold;">Rp ' . number_format($grand_total, 0, ',', '.') . '</td><td style="' . $s_sel . '"></td></tr>';
+        echo '</table></body></html>';
+        exit;
+    }
+
+    if ($export === 'csv') {
+        $filename = 'Data-Pesanan-' . date('Y-m-d_H-i') . '.csv';
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        $output = fopen('php://output', 'w');
+        fprintf($output, chr(0xEF).chr(0xBB).chr(0xBF));
+        fputcsv($output, ['ID', 'Nama Pembeli', 'No. Telepon', 'Email', 'Alamat Pengiriman', 'Produk', 'Qty', 'Total Harga', 'Waktu'], ';');
+        foreach ($pesanan_list as $r) {
+            fputcsv($output, [
+                $r['id'], $r['nama_pembeli'], $r['no_telp'] ?: '-', $r['email'] ?: '-',
+                $r['alamat'] ?: '-', $r['nama_produk'], $r['jumlah'], $r['total_harga'], $r['tanggal']
+            ], ';');
+        }
+        fclose($output);
+        exit;
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="id">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -114,7 +229,14 @@ try {
     <style>
         body { font-family: sans-serif; margin: 20px 40px; }
         nav a { margin-right: 15px; text-decoration: none; font-weight: bold; color: #24b47e; }
-        .table-wrapper { overflow-x: auto; margin-top: 20px; }
+        .header-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin: 20px 0 10px; }
+        .export-group { display: flex; flex-wrap: wrap; gap: 8px; }
+        .btn-exp { color: white; padding: 8px 12px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 13px; display: inline-flex; align-items: center; gap: 5px; }
+        .btn-xlsx { background: #107c41; } .btn-xlsx:hover { background: #0b5a2f; }
+        .btn-xls { background: #24b47e; } .btn-xls:hover { background: #1c8c61; }
+        .btn-csv { background: #4b5563; } .btn-csv:hover { background: #374151; }
+        .btn-pdf { background: #dc2626; } .btn-pdf:hover { background: #b91c1c; }
+        .table-wrapper { overflow-x: auto; margin-top: 10px; }
         table { width: 100%; border-collapse: collapse; min-width: 900px; }
         th, td { border: 1px solid #ddd; padding: 10px; text-align: left; vertical-align: top; font-size: 14px; }
         th { background: #24b47e; color: white; }
@@ -175,7 +297,16 @@ try {
         </div>
     </form>
 
-    <h3>Daftar Semua Pesanan Masuk</h3>
+    <div class="header-bar">
+        <h3 style="margin:0;">Daftar Semua Pesanan Masuk</h3>
+        <div class="export-group">
+            <a href="pesanan.php?export=xlsx" class="btn-exp btn-xlsx">📊 Excel (.xlsx)</a>
+            <a href="pesanan.php?export=xls" class="btn-exp btn-xls">📗 Excel (.xls)</a>
+            <a href="pesanan.php?export=csv" class="btn-exp btn-csv">📄 CSV (.csv)</a>
+            <a href="pesanan.php?export=pdf" class="btn-exp btn-pdf">📕 PDF (.pdf)</a>
+        </div>
+    </div>
+
     <div class="table-wrapper">
         <table>
             <thead>
